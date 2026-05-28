@@ -1,0 +1,1279 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>ASC-WR NextGen Live (v2)</title>
+<!-- Google Fonts: Inter for UI, JetBrains Mono for data -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg-dark: #07090e;
+    --panel-bg: rgba(18, 24, 38, 0.7);
+    --panel-border: rgba(255, 255, 255, 0.08);
+    --text-primary: #f0f4f9;
+    --text-muted: #8595ae;
+    --accent: #2dd4a7;
+    
+    /* State colors with HSL for glowing effects */
+    --color-normal-h: 163; --color-normal: hsl(var(--color-normal-h), 70%, 50%);
+    --color-drift-h: 38;   --color-drift:  hsl(var(--color-drift-h), 90%, 55%);
+    --color-wound-h: 210;  --color-wound:  hsl(var(--color-wound-h), 85%, 60%);
+    --color-fault-h: 350;  --color-fault:  hsl(var(--color-fault-h), 85%, 55%);
+    --color-shift-h: 250;  --color-shift:  hsl(var(--color-shift-h), 75%, 65%);
+    
+    --font-ui: 'Inter', sans-serif;
+    --font-mono: 'JetBrains Mono', monospace;
+  }
+
+  * {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  body {
+    background: radial-gradient(circle at 50% 0%, #111a2e 0%, var(--bg-dark) 70%);
+    color: var(--text-primary);
+    font-family: var(--font-ui);
+    min-height: 100vh;
+    padding: 20px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    max-width: 480px;
+    margin: 0 auto;
+  }
+
+  header {
+    text-align: center;
+    margin-bottom: 5px;
+  }
+
+  .logo {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 3px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+  }
+
+  .logo span {
+    color: var(--accent);
+    text-shadow: 0 0 10px rgba(45, 212, 167, 0.4);
+  }
+
+  .logo-sub {
+    font-size: 14px;
+    font-weight: 300;
+    color: var(--text-primary);
+    margin-top: 4px;
+  }
+
+  /* Glassmorphism Panel */
+  .panel {
+    background: var(--panel-bg);
+    border: 1px solid var(--panel-border);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border-radius: 20px;
+    padding: 20px;
+    position: relative;
+    overflow: hidden;
+    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.4);
+  }
+
+  /* Reactor Core State Display */
+  .core-display {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 24px 10px;
+    gap: 12px;
+  }
+
+  .reactor-orb {
+    width: 110px;
+    height: 110px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 35% 35%, rgba(255,255,255,0.15) 0%, rgba(0,0,0,0.6) 80%);
+    border: 2px solid var(--state-color, var(--color-normal));
+    box-shadow: 
+      inset 0 0 20px var(--state-color, var(--color-normal)),
+      0 0 30px rgba(var(--state-glow-rgb, 45, 212, 167), 0.35);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    transition: all 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  }
+
+  .reactor-orb::after {
+    content: '';
+    position: absolute;
+    width: 80%;
+    height: 80%;
+    border-radius: 50%;
+    background: var(--state-color, var(--color-normal));
+    opacity: 0.15;
+    filter: blur(8px);
+    animation: pulse 2s infinite ease-in-out;
+  }
+
+  .reactor-label {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 2px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+  }
+
+  .reactor-state-text {
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--state-color, var(--color-normal));
+    text-shadow: 0 0 15px rgba(var(--state-glow-rgb, 45, 212, 167), 0.3);
+    text-align: center;
+    letter-spacing: 0.5px;
+  }
+
+  .reactor-action-text {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-muted);
+    background: rgba(0, 0, 0, 0.25);
+    padding: 4px 12px;
+    border-radius: 99px;
+    border: 1px solid var(--panel-border);
+    margin-top: 4px;
+  }
+
+  .confidence-badge {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    text-align: right;
+  }
+
+  .confidence-badge span {
+    font-size: 9px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    display: block;
+    letter-spacing: 1px;
+  }
+
+  .confidence-badge b {
+    font-family: var(--font-mono);
+    font-size: 18px;
+    color: var(--text-primary);
+  }
+
+  /* Metric Progress Indicators */
+  .metrics-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .metric-card {
+    display: grid;
+    grid-template-columns: 85px 1fr 60px;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .metric-label {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+  }
+
+  .progress-bar-container {
+    height: 8px;
+    background: rgba(0, 0, 0, 0.4);
+    border-radius: 99px;
+    border: 1px solid rgba(255, 255, 255, 0.03);
+    overflow: hidden;
+    position: relative;
+  }
+
+  .progress-fill {
+    height: 100%;
+    width: 0%;
+    border-radius: 99px;
+    background: var(--accent);
+    box-shadow: 0 0 8px var(--accent);
+    transition: width 0.15s cubic-bezier(0.1, 0.8, 0.25, 1);
+  }
+
+  .metric-value {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    text-align: right;
+    font-weight: 700;
+  }
+
+  /* Canvas Real-Time Chart */
+  .chart-container {
+    padding: 10px;
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: 14px;
+    border: 1px solid rgba(255, 255, 255, 0.03);
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .chart-title {
+    font-size: 10px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    display: flex;
+    justify-content: space-between;
+  }
+
+  canvas {
+    width: 100%;
+    height: 70px;
+    display: block;
+    background: #040508;
+    border-radius: 8px;
+  }
+
+  /* Footer values */
+  .telemetry-row {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+    text-align: center;
+    background: rgba(0, 0, 0, 0.2);
+    padding: 10px;
+    border-radius: 14px;
+  }
+
+  .telemetry-item span {
+    display: block;
+    font-size: 9px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    margin-bottom: 2px;
+  }
+
+  .telemetry-item b {
+    font-family: var(--font-mono);
+    font-size: 14px;
+    color: var(--text-primary);
+  }
+
+  /* Buttons */
+  .btn {
+    width: 100%;
+    padding: 18px;
+    border: none;
+    border-radius: 16px;
+    font-family: var(--font-ui);
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    transition: all 0.2s ease;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+  }
+
+  .btn-primary {
+    background: linear-gradient(135deg, var(--accent) 0%, #1bb88f 100%);
+    color: #031410;
+  }
+
+  .btn-primary:hover {
+    box-shadow: 0 0 20px rgba(45, 212, 167, 0.4);
+    transform: translateY(-1px);
+  }
+
+  .btn-primary:active {
+    transform: translateY(1px);
+  }
+
+  .btn-secondary {
+    background: rgba(31, 42, 58, 0.4);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    color: var(--text-primary);
+  }
+
+  .btn-secondary:hover {
+    background: rgba(31, 42, 58, 0.6);
+  }
+
+  /* Diagnostics Log */
+  #diagLog {
+    background: #040508;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 12px;
+    padding: 12px;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    line-height: 1.5;
+    height: 110px;
+    overflow-y: auto;
+    white-space: pre-wrap;
+    color: #8fa1b3;
+  }
+
+  .log-ok { color: var(--color-normal); }
+  .log-warn { color: var(--color-drift); }
+  .log-err { color: var(--color-fault); }
+
+  .hidden {
+    display: none !important;
+  }
+
+  @keyframes pulse {
+    0% { transform: scale(0.96); opacity: 0.15; }
+    50% { transform: scale(1.05); opacity: 0.3; }
+    100% { transform: scale(0.96); opacity: 0.15; }
+  }
+
+  @keyframes orb-pulse-fast {
+    0% { transform: scale(0.98); box-shadow: inset 0 0 20px var(--state-color), 0 0 20px rgba(var(--state-glow-rgb), 0.35); }
+    50% { transform: scale(1.03); box-shadow: inset 0 0 30px var(--state-color), 0 0 45px rgba(var(--state-glow-rgb), 0.7); }
+    100% { transform: scale(0.98); box-shadow: inset 0 0 20px var(--state-color), 0 0 20px rgba(var(--state-glow-rgb), 0.35); }
+  }
+
+  .pulse-fast {
+    animation: orb-pulse-fast 0.6s infinite ease-in-out !important;
+  }
+
+  .pulse-slow {
+    animation: orb-pulse-fast 1.6s infinite ease-in-out !important;
+  }
+
+  #eventCount {
+    font-size: 9px;
+    font-family: var(--font-mono);
+    color: var(--text-muted);
+    text-align: center;
+    letter-spacing: 0.5px;
+  }
+</style>
+</head>
+<body>
+
+  <header>
+    <div class="logo">ASC-WR <span>Frontal Edge</span></div>
+    <div class="logo-sub">Выпаренная руда · Версия V2</div>
+  </header>
+
+  <!-- SETUP SCREEN -->
+  <div id="setupScreen" class="panel" style="display: flex; flex-direction: column; gap: 15px;">
+    <div class="core-display">
+      <div class="reactor-orb" style="--state-color: var(--accent); --state-glow-rgb: 45, 212, 167"></div>
+      <div class="reactor-state-text" style="font-size: 16px; margin-top: 10px; font-weight: 500;">Подготовка диагностического ядра</div>
+      <div class="reactor-action-text">Считывание гироскопа и акселерометра</div>
+    </div>
+    
+    <div id="diagLog">диагностический модуль загружен...</div>
+    
+    <button class="btn btn-primary" id="startBtn">▶ Активировать компаратор</button>
+    <div style="font-size: 10px; color: var(--text-muted); text-align: center; line-height: 1.4;">
+      Для работы демо требуется доступ к датчикам ускорения мобильного телефона.
+    </div>
+  </div>
+
+  <!-- RUNTIME SCREEN -->
+  <div id="runtimeScreen" class="hidden" style="display: flex; flex-direction: column; gap: 12px;">
+    <!-- Reactor Core -->
+    <div class="panel core-display" id="stagePanel">
+      <div class="confidence-badge">
+        <span>уверенность</span>
+        <b id="confVal">—</b>
+      </div>
+      
+      <div class="reactor-orb" id="reactorOrb"></div>
+      
+      <div class="reactor-label" style="margin-top: 8px;">Текущий вердикт коры:</div>
+      <div class="reactor-state-text" id="stateText">—</div>
+      <div class="reactor-action-text" id="actionText">—</div>
+    </div>
+
+    <!-- Live Plot Panel -->
+    <div class="panel chart-container">
+      <div class="chart-title">
+        <span>Вектор линейного ускорения (м/с²)</span>
+        <span style="font-size: 8px; color: var(--accent);">гравитация отфильтрована LPF</span>
+      </div>
+      <canvas id="liveChart"></canvas>
+    </div>
+
+    <!-- Analytics Progress Panel -->
+    <div class="panel metrics-grid">
+      <div class="metric-card">
+        <div class="metric-label">drift speed</div>
+        <div class="progress-bar-container">
+          <div class="progress-fill" id="barDrift" style="background: var(--color-drift); box-shadow: 0 0 8px var(--color-drift)"></div>
+        </div>
+        <div class="metric-value" id="valDrift">0.0</div>
+      </div>
+      
+      <div class="metric-card">
+        <div class="metric-label">drift dist</div>
+        <div class="progress-bar-container">
+          <div class="progress-fill" id="barDist" style="background: var(--color-drift); box-shadow: 0 0 8px var(--color-drift)"></div>
+        </div>
+        <div class="metric-value" id="valDist">0.0</div>
+      </div>
+
+      <div class="metric-card">
+        <div class="metric-label">fault risk</div>
+        <div class="progress-bar-container">
+          <div class="progress-fill" id="barFault" style="background: var(--color-fault); box-shadow: 0 0 8px var(--color-fault)"></div>
+        </div>
+        <div class="metric-value" id="valFault">0.0</div>
+      </div>
+
+      <div class="metric-card">
+        <div class="metric-label">local risk</div>
+        <div class="progress-bar-container">
+          <div class="progress-fill" id="barLocal" style="background: var(--color-wound); box-shadow: 0 0 8px var(--color-wound)"></div>
+        </div>
+        <div class="metric-value" id="valLocal">0.0</div>
+      </div>
+
+      <div class="metric-card">
+        <div class="metric-label">severe risk</div>
+        <div class="progress-bar-container">
+          <div class="progress-fill" id="barSevere" style="background: var(--color-fault); box-shadow: 0 0 8px var(--color-fault)"></div>
+        </div>
+        <div class="metric-value" id="valSevere">0.00</div>
+      </div>
+    </div>
+
+    <!-- Raw Data -->
+    <div class="panel telemetry-row">
+      <div class="telemetry-item">
+        <span>X (Linear)</span>
+        <b id="tx">0.00</b>
+      </div>
+      <div class="telemetry-item">
+        <span>Y (Linear)</span>
+        <b id="ty">0.00</b>
+      </div>
+      <div class="telemetry-item">
+        <span>Z (Linear)</span>
+        <b id="tz">0.00</b>
+      </div>
+    </div>
+
+    <div id="eventCount">Событий обработано: <b>0</b></div>
+    
+    <button class="btn btn-secondary" id="recalBtn">Рекалибровка базовой нормы</button>
+  </div>
+
+<script>
+// =============================================================================
+// ASC-WR NEXT-GEN CORE V2 (Сплит Скорости и Смещения, Разрешение Техдолга №1)
+// =============================================================================
+const STATES = Object.freeze({
+  NORMAL: "NORMAL",
+  LOCAL_WOUND: "LOCAL_WOUND",
+  IRREVERSIBLE_DRIFT: "IRREVERSIBLE_DRIFT",
+  COORDINATED_FAULT: "COORDINATED_FAULT",
+  GLOBAL_CONTEXT_SHIFT: "GLOBAL_CONTEXT_SHIFT",
+});
+
+const ACTIONS = Object.freeze({
+  HOLD: "HOLD",
+  INSPECT_LOCAL: "INSPECT_LOCAL",
+  THROTTLE: "THROTTLE",
+  THROTTLE_AND_ESCALATE: "THROTTLE_AND_ESCALATE",
+  ADAPT_BASELINE: "ADAPT_BASELINE",
+  SAFE_STOP: "SAFE_STOP",
+  REQUIRE_AUTHORIZATION: "REQUIRE_AUTHORIZATION",
+});
+
+function clamp(x, lo, hi) {
+  return Math.max(lo, Math.min(hi, x));
+}
+
+function mean(xs) {
+  return xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : 0;
+}
+
+function normalize(dist) {
+  const total = Object.values(dist).reduce((a, b) => a + b, 0) || 1;
+  const out = {};
+  for (const [key, value] of Object.entries(dist)) out[key] = value / total;
+  return out;
+}
+
+function argMax(keys, score) {
+  let best = keys[0];
+  let bestScore = score(best);
+  for (const key of keys.slice(1)) {
+    const s = score(key);
+    if (s > bestScore) {
+      best = key;
+      bestScore = s;
+    }
+  }
+  return best;
+}
+
+function scalar(value, fallback = 0) {
+  return Number.isFinite(value) ? value : fallback;
+}
+
+function contextShiftRiskSeed(loadRisk, heatRisk) {
+  return Math.max(0.1, loadRisk + heatRisk * 0.25);
+}
+
+function featureVector(frame) {
+  const vibration = Array.isArray(frame.vibration) ? frame.vibration : [];
+  const tactile = Array.isArray(frame.tactile) ? frame.tactile : [];
+  const force = scalar(frame.force);
+  const torque = scalar(frame.torque);
+  const current = scalar(frame.current);
+  const temperature = scalar(frame.temperature);
+  const position = scalar(frame.position);
+  const velocity = scalar(frame.velocity);
+
+  let vibrationEnergy = 0;
+  let peakDelta = 0;
+  for (let i = 1; i < vibration.length; i++) {
+    const d = Math.abs(vibration[i] - vibration[i - 1]);
+    vibrationEnergy += d;
+    peakDelta = Math.max(peakDelta, d);
+  }
+  vibrationEnergy = vibration.length > 1 ? vibrationEnergy / (vibration.length - 1) : 0;
+
+  const tactileMean = mean(tactile);
+  let tactileSpread = 0;
+  for (const v of tactile) tactileSpread += Math.abs(v - tactileMean);
+  tactileSpread = tactile.length ? tactileSpread / tactile.length : 0;
+
+  return {
+    load: Math.abs(force) + Math.abs(torque) + Math.abs(current) * 0.35,
+    heat: Math.abs(temperature),
+    motion: Math.abs(position) * 0.05 + Math.abs(velocity),
+    vibrationEnergy,
+    peakDelta,
+    tactileMean,
+    tactileSpread,
+  };
+}
+
+class BaselineModel {
+  constructor(learningRate = 0.04) {
+    this.learningRate = learningRate;
+    this.center = null;
+    this.scale = null;
+  }
+
+  calibrate(frames) {
+    const features = frames.map(featureVector);
+    this.center = {};
+    this.scale = {};
+    for (const key of Object.keys(features[0] || featureVector({}))) {
+      const values = features.map((f) => f[key]);
+      const m = mean(values);
+      const mad = mean(values.map((v) => Math.abs(v - m)));
+      this.center[key] = m;
+      this.scale[key] = Math.max(0.1, mad);
+    }
+  }
+
+  isReady() {
+    return this.center !== null && this.scale !== null;
+  }
+
+  residual(features) {
+    if (!this.isReady()) throw new Error("ASC_WR_UNCALIBRATED");
+    const out = {};
+    for (const key of Object.keys(this.center)) {
+      out[key] = (features[key] - this.center[key]) / this.scale[key];
+    }
+    return out;
+  }
+
+  adaptSafe(features) {
+    if (!this.isReady()) throw new Error("ASC_WR_UNCALIBRATED");
+    for (const key of Object.keys(this.center)) {
+      this.center[key] = this.center[key] * (1 - this.learningRate) + features[key] * this.learningRate;
+      const absResidual = Math.abs(features[key] - this.center[key]);
+      this.scale[key] = Math.max(0.1, this.scale[key] * 0.98 + absResidual * 0.02);
+    }
+  }
+
+  exportState() {
+    return { learningRate: this.learningRate, center: this.center, scale: this.scale };
+  }
+
+  importState(snapshot) {
+    this.learningRate = snapshot.learningRate;
+    this.center = snapshot.center;
+    this.scale = snapshot.scale;
+  }
+}
+
+// УЛУЧШЕННЫЙ ДРЕЙФ-ТРЕКЕР V2 (Чистый сплит скорости и дистанции)
+class DriftTracker {
+  constructor(options = {}) {
+    this.keys = options.keys || ["load", "motion"];
+    this.window = options.window ?? 14;
+    this.leak = options.leak ?? 0.10;
+    this.rateDeadband = options.rateDeadband ?? 0.04;
+    this.tHigh = options.tHigh ?? 2.2;
+    this.tLow = options.tLow ?? 1.1;
+    this.reset();
+  }
+
+  reset() {
+    this.prev = {};
+    this.chronic = {};
+    this.peakLevel = {};
+    this.history = {};
+    for (const key of this.keys) {
+      this.prev[key] = null;
+      this.chronic[key] = 0;
+      this.peakLevel[key] = 0;
+      this.history[key] = [];
+    }
+    this.driftAlarm = false;
+  }
+
+  update(residual) {
+    let maxIrreversibility = 0;
+    let maxSpeed = 0;
+    let maxDistance = 0;
+    let returning = false;
+
+    for (const key of this.keys) {
+      const level = residual[key] ?? 0;
+      const prev = this.prev[key];
+      this.prev[key] = level;
+
+      const absLevel = Math.abs(level);
+      this.peakLevel[key] = Math.max(this.peakLevel[key] ?? 0, absLevel);
+      maxDistance = Math.max(maxDistance, absLevel);
+
+      if (prev === null) continue;
+
+      const rate = level - prev; // производная
+
+      // Накопитель направления с утечкой (leak)
+      this.chronic[key] *= 1 - this.leak;
+      const dir = rate > this.rateDeadband ? 1 : rate < -this.rateDeadband ? -1 : 0;
+      if (dir !== 0) this.chronic[key] += dir;
+
+      // Окно знака скорости (стабильность монотонности)
+      const hist = this.history[key];
+      hist.push(dir);
+      if (hist.length > this.window) hist.shift();
+      const signNet = hist.reduce((a, b) => a + b, 0);
+      const active = hist.filter((s) => s !== 0).length || 1;
+      const consistency = Math.abs(signNet) / active;
+
+      // Мощность дрейфа (скорость)
+      const speedMagnitude = Math.abs(this.chronic[key]) * consistency;
+      maxSpeed = Math.max(maxSpeed, speedMagnitude);
+      maxIrreversibility = Math.max(maxIrreversibility, consistency);
+
+      // Проверка на возврат в норму
+      const peak = this.peakLevel[key];
+      if (peak > this.tLow && absLevel < peak * 0.6) {
+        returning = true;
+        this.peakLevel[key] = Math.max(absLevel, this.tLow); // спад пика
+      }
+    }
+
+    // Gated дрейф для триггера тревоги
+    const driftMagnitude = Math.max(maxSpeed, maxDistance) * (maxDistance > this.tHigh ? 1 : maxIrreversibility);
+
+    if (driftMagnitude > this.tHigh) this.driftAlarm = true;
+    else if (driftMagnitude < this.tLow) this.driftAlarm = false;
+
+    return {
+      driftMagnitude,
+      speed: maxSpeed,
+      distance: maxDistance,
+      irreversibility: maxIrreversibility,
+      returning,
+      driftAlarm: this.driftAlarm,
+    };
+  }
+}
+
+class FrontalStateEstimator {
+  constructor() {
+    this.belief = {
+      [STATES.NORMAL]: 1,
+      [STATES.LOCAL_WOUND]: 0,
+      [STATES.IRREVERSIBLE_DRIFT]: 0,
+      [STATES.COORDINATED_FAULT]: 0,
+      [STATES.GLOBAL_CONTEXT_SHIFT]: 0,
+    };
+    this.transition = {};
+    const states = Object.values(STATES);
+    const self = 0.72;
+    const other = (1 - self) / (states.length - 1);
+    for (const from of states) {
+      this.transition[from] = {};
+      for (const to of states) this.transition[from][to] = from === to ? self : other;
+    }
+  }
+
+  infer(scores) {
+    const prior = {};
+    for (const to of Object.values(STATES)) {
+      prior[to] = 0;
+      for (const from of Object.values(STATES)) prior[to] += this.belief[from] * this.transition[from][to];
+    }
+
+    const likelihood = this.softmax(scores);
+    const posterior = {};
+    for (const state of Object.values(STATES)) posterior[state] = prior[state] * likelihood[state];
+    this.belief = normalize(posterior);
+
+    const state = argMax(Object.values(STATES), (s) => this.belief[s]);
+    return {
+      state,
+      confidence: this.belief[state],
+      likelihood,
+      belief: { ...this.belief },
+    };
+  }
+
+  softmax(scores) {
+    const maxScore = Math.max(...Object.values(scores));
+    const exp = {};
+    for (const [key, value] of Object.entries(scores)) exp[key] = Math.exp(value - maxScore);
+    return normalize(exp);
+  }
+}
+
+class FrontalActionPolicy {
+  constructor() {
+    this.q = {};
+    for (const state of Object.values(STATES)) {
+      this.q[state] = {
+        [ACTIONS.HOLD]: 0,
+        [ACTIONS.INSPECT_LOCAL]: 0,
+        [ACTIONS.THROTTLE]: 0,
+        [ACTIONS.THROTTLE_AND_ESCALATE]: 0,
+        [ACTIONS.ADAPT_BASELINE]: 0,
+        [ACTIONS.SAFE_STOP]: -0.2,
+      };
+    }
+    this.q[STATES.NORMAL][ACTIONS.HOLD] = 0.8;
+    this.q[STATES.LOCAL_WOUND][ACTIONS.INSPECT_LOCAL] = 0.6;
+    this.q[STATES.IRREVERSIBLE_DRIFT][ACTIONS.THROTTLE_AND_ESCALATE] = 0.7;
+    this.q[STATES.COORDINATED_FAULT][ACTIONS.THROTTLE] = 0.7;
+    this.q[STATES.GLOBAL_CONTEXT_SHIFT][ACTIONS.ADAPT_BASELINE] = 0.6;
+  }
+
+  choose(inference, risk) {
+    const inhibited = [];
+    if (
+      risk.faultRisk > 2.0 ||
+      inference.belief[STATES.COORDINATED_FAULT] > 0.25 ||
+      inference.belief[STATES.IRREVERSIBLE_DRIFT] > 0.25 ||
+      risk.driftCaution
+    ) {
+      inhibited.push(ACTIONS.ADAPT_BASELINE);
+    }
+    if (risk.severeRisk > 0.80) {
+      return { action: ACTIONS.SAFE_STOP, inhibited };
+    }
+    const allowed = Object.values(ACTIONS).filter((a) => !inhibited.includes(a));
+    const action = argMax(allowed, (a) => this.q[inference.state][a]);
+    return { action, inhibited };
+  }
+}
+
+class AscWrFrontalEdgeLayer {
+  constructor(options = {}) {
+    this.options = {
+      safeAdaptConfidence: options.safeAdaptConfidence ?? 0.65,
+      severeStopRisk: options.severeStopRisk ?? 0.92,
+      learningRate: options.learningRate ?? 0.04,
+      humanSafetyUncertaintyStop: options.humanSafetyUncertaintyStop ?? 0.82,
+    };
+    this.baseline = new BaselineModel(this.options.learningRate);
+    this.drift = new DriftTracker(options.drift);
+    this.estimator = new FrontalStateEstimator();
+    this.policy = new FrontalActionPolicy();
+    this.lastVerdict = null;
+  }
+
+  calibrate(frames) {
+    if (!Array.isArray(frames) || frames.length === 0) throw new Error("ASC_WR_EMPTY_CALIBRATION");
+    this.baseline.calibrate(frames);
+    this.drift.reset();
+  }
+
+  tick(frame) {
+    const features = featureVector(frame);
+    const residual = this.baseline.residual(features);
+    const drift = this.drift.update(residual);
+    const derived = this.deriveSignals(residual, drift);
+    const scores = this.scoreStates(derived);
+    const inference = this.estimator.infer(scores);
+    
+    // Policy
+    const decision = this.applyHumanSafetyContract(frame, inference, derived, this.policy.choose(inference, derived));
+
+    const dangerousAdaptationBlocked = decision.inhibited.includes(ACTIONS.ADAPT_BASELINE) || derived.driftCaution;
+    const canAdapt =
+      decision.action === ACTIONS.ADAPT_BASELINE &&
+      inference.state === STATES.GLOBAL_CONTEXT_SHIFT &&
+      inference.confidence >= this.options.safeAdaptConfidence &&
+      !derived.driftCaution &&
+      !dangerousAdaptationBlocked;
+
+    if (canAdapt) this.baseline.adaptSafe(features);
+
+    const verdict = {
+      actuatorId: frame.actuatorId ?? "unknown",
+      timestamp: frame.timestamp ?? Date.now(),
+      state: inference.state,
+      confidence: Number(inference.confidence.toFixed(4)),
+      action: decision.action,
+      inhibited: decision.inhibited,
+      dangerousAdaptationBlocked,
+      explanation: {
+        localRisk: Number(derived.localRisk.toFixed(4)),
+        faultRisk: Number(derived.faultRisk.toFixed(4)),
+        contextShiftRisk: Number(derived.contextShiftRisk.toFixed(4)),
+        severeRisk: Number(derived.severeRisk.toFixed(4)),
+        driftSpeed: Number(drift.speed.toFixed(4)),
+        driftDistance: Number(drift.distance.toFixed(4)),
+        driftAlarm: drift.driftAlarm,
+        belief: Object.fromEntries(Object.entries(inference.belief).map(([k, v]) => [k, Number(v.toFixed(4))])),
+      },
+    };
+    this.lastVerdict = verdict;
+    return verdict;
+  }
+
+  deriveSignals(residual, drift) {
+    const loadRisk = Math.abs(residual.load);
+    const heatRisk = Math.abs(residual.heat);
+    const vibrationRisk = Math.abs(residual.vibrationEnergy) + Math.abs(residual.peakDelta) * 0.45;
+    const tactileRisk = Math.abs(residual.tactileSpread) + Math.abs(residual.tactileMean) * 0.25;
+    const motionRisk = Math.abs(residual.motion);
+
+    const textureFault = vibrationRisk * 0.7;
+    
+    // Используем сплит: у дрейфа теперь есть скорость и дистанция
+    const sustainedDeparture = drift.returning ? 0 : drift.distance;
+    const irreversibleDrift = drift.returning
+      ? 0
+      : Math.max(drift.speed * drift.irreversibility, sustainedDeparture);
+
+    const localRisk = Math.max(tactileRisk, motionRisk, loadRisk * 0.55);
+    const faultRisk = textureFault + (irreversibleDrift > 1.5 ? textureFault * 0.5 : 0);
+    const focalDominance = tactileRisk / Math.max(0.1, contextShiftRiskSeed(loadRisk, heatRisk));
+
+    const reversibleDrift = drift.returning ? drift.driftMagnitude : 0;
+    const contextShiftRisk = Math.max(
+      0,
+      loadRisk + heatRisk * 0.25 - vibrationRisk * 0.55 - tactileRisk * 0.45 + reversibleDrift * 0.20 - irreversibleDrift * 0.6 - sustainedDeparture * 0.5,
+    );
+
+    const severeRisk = clamp((faultRisk + Math.min(irreversibleDrift, 4) * 0.18) / 8, 0, 1);
+    const driftCaution = drift.driftAlarm && !drift.returning;
+
+    return { 
+      localRisk, 
+      faultRisk, 
+      contextShiftRisk, 
+      severeRisk, 
+      tactileRisk, 
+      focalDominance, 
+      irreversibleDrift, 
+      driftCaution,
+      speed: drift.speed,
+      distance: drift.distance
+    };
+  }
+
+  applyHumanSafetyContract(frame, inference, risk, decision) {
+    const inhibited = new Set(decision.inhibited);
+    const hazardousActions = new Set(frame.hazardousActions || []);
+    const humanSafetyCritical = Boolean(frame.humanSafetyCritical) || hazardousActions.size > 0;
+
+    if (!humanSafetyCritical) return { ...decision, inhibited: [...inhibited] };
+
+    inhibited.add(ACTIONS.ADAPT_BASELINE);
+    for (const action of hazardousActions) inhibited.add(action);
+
+    const uncertain = inference.confidence < this.options.humanSafetyUncertaintyStop;
+    const faultLike =
+      inference.state === STATES.COORDINATED_FAULT ||
+      inference.state === STATES.IRREVERSIBLE_DRIFT ||
+      risk.faultRisk > 1.5 ||
+      risk.severeRisk > 0.35 ||
+      risk.driftCaution;
+
+    if (faultLike || uncertain) {
+      return {
+        action: ACTIONS.SAFE_STOP,
+        inhibited: [...inhibited],
+        safetyLockActive: true,
+        humanSafetyReason: faultLike ? "fault_like_signal" : "uncertain_state",
+      };
+    }
+
+    return { ...decision, inhibited: [...inhibited], safetyLockActive: true };
+  }
+
+  // ОФИЦИАЛЬНОЕ РАЗВЕДЕНИЕ СИГНАЛОВ В ОЦЕНКЕ СОСТОЯНИЙ (Смерть багу "лягушки")
+  scoreStates(risk) {
+    return {
+      [STATES.NORMAL]: 
+        2.2 - risk.localRisk * 0.8 - risk.faultRisk * 0.95 - risk.distance * 0.5 - risk.speed * 0.5,
+        
+      [STATES.LOCAL_WOUND]: 
+        risk.localRisk * 1.35 + risk.tactileRisk * 0.65 + risk.focalDominance * 0.75 - risk.faultRisk * 0.35 - risk.contextShiftRisk * 0.18 - risk.irreversibleDrift * 0.5,
+        
+      // Скорость (speed) и дистанция (distance) дают синергетический эффект необратимости
+      [STATES.IRREVERSIBLE_DRIFT]: 
+        (risk.distance * 0.8 + risk.speed * 1.25) - risk.faultRisk * 1.5 - risk.localRisk * 0.4,
+        
+      [STATES.COORDINATED_FAULT]: 
+        risk.faultRisk * 1.35 + risk.severeRisk * 2.0,
+        
+      // В контекстном сдвиге скорость падает (поскольку дрейф завершился или затух), 
+      // но смещение присутствует
+      [STATES.GLOBAL_CONTEXT_SHIFT]: 
+        risk.contextShiftRisk * 1.05 - risk.speed * 1.3 - risk.distance * 0.15,
+    };
+  }
+}
+
+// =============================================================================
+// UI & ДАТЧИКИ С ВЫСОКОЧАСТОТНЫМ ФИЛЬТРОМ ГРАВИТАЦИИ
+// =============================================================================
+var $ = function(id){return document.getElementById(id);};
+var STATE_COLORS = {
+  NORMAL: "var(--color-normal)",
+  IRREVERSIBLE_DRIFT: "var(--color-drift)",
+  LOCAL_WOUND: "var(--color-wound)",
+  COORDINATED_FAULT: "var(--color-fault)",
+  GLOBAL_CONTEXT_SHIFT: "var(--color-shift)"
+};
+var STATE_GLOW_RGBS = {
+  NORMAL: "45, 212, 167",
+  IRREVERSIBLE_DRIFT: "245, 166, 35",
+  LOCAL_WOUND: "74, 163, 255",
+  COORDINATED_FAULT: "255, 77, 94",
+  GLOBAL_CONTEXT_SHIFT: "155, 140, 255"
+};
+
+var layer = null, calibrating = false, calBuffer = [], last = {x:0, y:0, z:0}, evCount = 0, vibWindow = [];
+var chartData = []; // Хранит историю точек для Canvas
+
+// Высокочастотный фильтр гравитации
+var gravity = { x: 0, y: 0, z: 0 };
+var isGravityInitialized = false;
+
+function toFrame(ax, ay, az, t) {
+  if (!isGravityInitialized) {
+    gravity.x = ax;
+    gravity.y = ay;
+    gravity.z = az;
+    isGravityInitialized = true;
+  }
+  // Низкочастотный фильтр гравитации (LPF)
+  var alpha = 0.98;
+  gravity.x = alpha * gravity.x + (1 - alpha) * ax;
+  gravity.y = alpha * gravity.y + (1 - alpha) * ay;
+  gravity.z = alpha * gravity.z + (1 - alpha) * az;
+
+  // Вычитание вектора тяжести (HPF)
+  var lx = ax - gravity.x;
+  var ly = ay - gravity.y;
+  var lz = az - gravity.z;
+
+  var mag = Math.sqrt(lx*lx + ly*ly + lz*lz);
+  vibWindow.push(mag);
+  if (vibWindow.length > 8) vibWindow.shift();
+
+  // Добавляем во временную базу графика
+  chartData.push({x: lx, y: ly, z: lz});
+  if (chartData.length > 100) chartData.shift();
+
+  return {
+    timestamp: t,
+    actuatorId: "phone",
+    force: lx,
+    torque: ly,
+    current: Math.abs(lz),
+    temperature: 0,
+    position: 0,
+    velocity: mag,
+    vibration: vibWindow.slice(),
+    tactile: [Math.abs(lx), Math.abs(ly)]
+  };
+}
+
+function diag(msg, cls) {
+  var d = $("diagLog");
+  var span = cls ? '<span class="' + cls + '">' + msg + '</span>' : msg;
+  d.innerHTML = span + "\n" + d.innerHTML;
+}
+
+function onMotion(e) {
+  var a = e.accelerationIncludingGravity || e.acceleration;
+  if (!a || (a.x == null && a.y == null && a.z == null)) return;
+  last = { x: a.x || 0, y: a.y || 0, z: a.z || 0 };
+  evCount++;
+}
+
+function startDeviceMotion() {
+  window.addEventListener("devicemotion", onMotion, true);
+  diag("Подключение слушателя devicemotion...", "log-ok");
+  
+  setTimeout(function() {
+    if (evCount === 0) {
+      diag("Запрос devicemotion пуст. Активирую Accelerometer API...", "log-warn");
+      tryGenericSensor();
+    } else {
+      diag("✔ Сенсор активен. Накоплено сигналов: " + evCount, "log-ok");
+      beginCalibration();
+    }
+  }, 1200);
+}
+
+function tryGenericSensor() {
+  if (typeof Accelerometer === "undefined") {
+    diag("✖ Физический Accelerometer API недоступен в браузере", "log-err");
+    diag("Критическая ошибка: датчики движения заблокированы.", "log-err");
+    return;
+  }
+  try {
+    var acc = new Accelerometer({ frequency: 40 });
+    acc.addEventListener("reading", function() {
+      last = { x: acc.x || 0, y: acc.y || 0, z: acc.z || 0 };
+      evCount++;
+    });
+    acc.addEventListener("error", function(ev) {
+      diag("✖ Сбой акселерометра: " + (ev.error && ev.error.name), "log-err");
+    });
+    acc.start();
+    diag("Служба Generic Sensor активирована...", "log-ok");
+    setTimeout(function() {
+      if (evCount === 0) {
+        diag("✖ Generic Sensor не вернул ни одного значения", "log-err");
+      } else {
+        diag("✔ Сенсор активен (Generic). Событий: " + evCount, "log-ok");
+        beginCalibration();
+      }
+    }, 1200);
+  } catch (err) {
+    diag("✖ Ошибка инициализации: " + err.message, "log-err");
+  }
+}
+
+function beginCalibration() {
+  diag("Начало калибровки базовой нормы (2 секунды покоя)...", "log-warn");
+  calibrating = true;
+  calBuffer = [];
+  var t0 = performance.now();
+  
+  (function tick() {
+    calBuffer.push(toFrame(last.x, last.y, last.z, performance.now()));
+    if (performance.now() - t0 < 2000) {
+      requestAnimationFrame(tick);
+    } else {
+      layer = new AscWrFrontalEdgeLayer({
+        drift: { keys: ["load", "motion"], window: 14, leak: 0.08, rateDeadband: 0.15, tHigh: 2.8, tLow: 1.2 }
+      });
+      try {
+        layer.calibrate(calBuffer);
+        diag("✔ Базовая модель успешно обучена!", "log-ok");
+      } catch(e) {
+        diag("✖ Калибровка завершилась с ошибкой: " + e.message, "log-err");
+      }
+      calibrating = false;
+      
+      // Переключаем интерфейс
+      $("setupScreen").classList.add("hidden");
+      $("runtimeScreen").classList.remove("hidden");
+      
+      loop();
+    }
+  })();
+}
+
+function setProgress(id, val, max) {
+  var pct = Math.max(0, Math.min(100, (val / max) * 100));
+  $(id).style.width = pct + "%";
+}
+
+function loop() {
+  if (layer && !calibrating) {
+    var frameData = toFrame(last.x, last.y, last.z, performance.now());
+    var v;
+    try {
+      v = layer.tick(frameData);
+    } catch(e) {
+      requestAnimationFrame(loop);
+      return;
+    }
+    
+    var ex = v.explanation;
+    
+    // Обновление UI
+    $("stateText").textContent = v.state;
+    $("actionText").textContent = "→ " + v.action + (v.dangerousAdaptationBlocked ? " · Адаптация ЗАБЛОКИРОВАНА" : "");
+    $("confVal").textContent = (v.confidence * 100).toFixed(0) + "%";
+    
+    // Динамический цвет реактора
+    var orbColor = STATE_COLORS[v.state] || "var(--accent)";
+    var orbGlow = STATE_GLOW_RGBS[v.state] || "45, 212, 167";
+    $("stagePanel").style.setProperty("--state-color", orbColor);
+    $("stagePanel").style.setProperty("--state-glow-rgb", orbGlow);
+    
+    // Анимационный пульс реактора в зависимости от критичности состояния
+    var orb = $("reactorOrb");
+    orb.className = "reactor-orb";
+    if (v.state === "COORDINATED_FAULT") {
+      orb.classList.add("pulse-fast");
+    } else if (v.state === "IRREVERSIBLE_DRIFT") {
+      orb.classList.add("pulse-slow");
+    }
+    
+    // Заполнение шкал
+    setProgress("barDrift", ex.driftSpeed, 8.0);
+    $("valDrift").textContent = ex.driftSpeed.toFixed(2);
+    
+    setProgress("barDist", ex.driftDistance, 8.0);
+    $("valDist").textContent = ex.driftDistance.toFixed(2);
+    
+    setProgress("barFault", ex.faultRisk, 5.0);
+    $("valFault").textContent = ex.faultRisk.toFixed(2);
+    
+    setProgress("barLocal", ex.localRisk, 8.0);
+    $("valLocal").textContent = ex.localRisk.toFixed(2);
+    
+    setProgress("barSevere", ex.severeRisk, 1.0);
+    $("valSevere").textContent = ex.severeRisk.toFixed(2);
+    
+    // Сырые отфильтрованные данные
+    $("tx").textContent = frameData.force.toFixed(2);
+    $("ty").textContent = frameData.torque.toFixed(2);
+    $("tz").textContent = frameData.current.toFixed(2);
+    
+    $("eventCount").querySelector("b").textContent = evCount;
+    
+    // Отрисовка графика
+    drawChart();
+  }
+  requestAnimationFrame(loop);
+}
+
+// Функция визуализации сигналов на холсте Canvas
+var canvas = $("liveChart");
+var ctx = canvas.getContext("2d");
+
+function drawChart() {
+  var width = canvas.clientWidth;
+  var height = canvas.clientHeight;
+  if (canvas.width !== width || canvas.height !== height) {
+    canvas.width = width;
+    canvas.height = height;
+  }
+  
+  ctx.clearRect(0, 0, width, height);
+  
+  // Отрисовка центральной оси
+  ctx.strokeStyle = "rgba(255, 255, 255, 0.1)";
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(0, height / 2);
+  ctx.lineTo(width, height / 2);
+  ctx.stroke();
+  
+  if (chartData.length < 2) return;
+  
+  var dx = width / 100;
+  
+  // Рисуем оси X (red), Y (green), Z (blue) линейного ускорения
+  var axes = [
+    {key: 'x', color: '#ff4d5e'},
+    {key: 'y', color: '#2dd4a7'},
+    {key: 'z', color: '#4aa3ff'}
+  ];
+  
+  axes.forEach(function(axis) {
+    ctx.strokeStyle = axis.color;
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    
+    for (var i = 0; i < chartData.length; i++) {
+      var xPos = i * dx;
+      // Умножаем на масштаб, чтобы поместить в график (-4 до +4 м/с2)
+      var val = chartData[i][axis.key];
+      var yPos = (height / 2) - (val * (height / 8));
+      yPos = clamp(yPos, 2, height - 2);
+      
+      if (i === 0) {
+        ctx.moveTo(xPos, yPos);
+      } else {
+        ctx.lineTo(xPos, yPos);
+      }
+    }
+    ctx.stroke();
+  });
+}
+
+function go() {
+  diag("Запуск датчиков...", "");
+  if (typeof DeviceMotionEvent !== "undefined" && typeof DeviceMotionEvent.requestPermission === "function") {
+    diag("Запрашиваю доступ к гироскопу (iOS)...", "log-warn");
+    DeviceMotionEvent.requestPermission().then(function(res) {
+      diag("Статус доступа iOS: " + res, res === "granted" ? "log-ok" : "log-err");
+      if (res === "granted") startDeviceMotion();
+    }).catch(function(err) {
+      diag("✖ Сбой DeviceMotion: " + err.message, "log-err");
+    });
+  } else {
+    diag("Режим совместимости: Android / Desktop (без прямого запроса)", "log-ok");
+    startDeviceMotion();
+  }
+}
+
+$("startBtn").addEventListener("click", go);
+$("recalBtn").addEventListener("click", function() {
+  diag("Принудительная рекалибровка...", "log-warn");
+  calibrating = true;
+  calBuffer = [];
+  var t0 = performance.now();
+  
+  (function tick() {
+    calBuffer.push(toFrame(last.x, last.y, last.z, performance.now()));
+    if (performance.now() - t0 < 2000) {
+      requestAnimationFrame(tick);
+    } else {
+      try {
+        layer.calibrate(calBuffer);
+        diag("✔ Рекалибровка нормы завершена успешно!", "log-ok");
+      } catch(e) {
+        diag("✖ Ошибка калибровки: " + e.message, "log-err");
+      }
+      calibrating = false;
+    }
+  })();
+});
+
+</script>
+</body>
+</html>
