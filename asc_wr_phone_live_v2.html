@@ -472,7 +472,24 @@
     </div>
 
     <div id="eventCount">Событий обработано: <b>0</b></div>
-    
+
+    <!-- Logger panel -->
+    <div class="panel" style="display:flex; flex-direction:column; gap:10px; background:rgba(255,77,94,0.08); border:1px solid rgba(255,77,94,0.20);">
+      <div class="chart-title"><span>Модуль сбора телеметрии поездок</span><span id="logChannels" style="font-size:8px; color:var(--text-muted);">каналы: accel</span></div>
+      <select id="logMode" class="btn btn-secondary" style="padding:10px; text-transform:none; font-size:12px;">
+        <option value="reference_active">Утро бодрый (референс)</option>
+        <option value="fatigue_night">После ночной смены (целевой дрейф)</option>
+        <option value="reference_wife">Жена за рулём (референс контроля)</option>
+        <option value="freeform">Свободная запись</option>
+      </select>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+        <button class="btn btn-primary" id="startLogBtn" style="padding:12px; font-size:11px; background:#ff4d5e;">● Запись</button>
+        <button class="btn btn-secondary" id="stopLogBtn" style="padding:12px; font-size:11px;" disabled>■ Стоп / Скачать</button>
+      </div>
+      <button class="btn btn-secondary" id="markBtn" style="padding:14px; font-size:12px; background:rgba(255,170,40,0.18); border:1px solid rgba(255,170,40,0.4);" disabled>⚑ Клюнул носом (маркер)</button>
+      <div id="logStatus" style="font-size:10px; text-align:center; color:var(--text-muted);">Логгер остановлен. Кадров: 0 · маркеров: 0</div>
+    </div>
+
     <button class="btn btn-secondary" id="recalBtn">Рекалибровка базовой нормы</button>
   </div>
 
@@ -561,7 +578,8 @@ function featureVector(frame) {
   return {
     load: Math.abs(force) + Math.abs(torque) + Math.abs(current) * 0.35,
     heat: Math.abs(temperature),
-    motion: Math.abs(position) * 0.05 + Math.abs(velocity),
+    motion: Math.abs(velocity),
+    tilt: Math.abs(position),
     vibrationEnergy,
     peakDelta,
     tactileMean,
@@ -854,6 +872,8 @@ class AscWrFrontalEdgeLayer {
         severeRisk: Number(derived.severeRisk.toFixed(4)),
         driftSpeed: Number(drift.speed.toFixed(4)),
         driftDistance: Number(drift.distance.toFixed(4)),
+        driftMagnitude: Number(drift.driftMagnitude.toFixed(4)),
+        irreversibility: Number(drift.irreversibility.toFixed(4)),
         driftAlarm: drift.driftAlarm,
         belief: Object.fromEntries(Object.entries(inference.belief).map(([k, v]) => [k, Number(v.toFixed(4))])),
       },
@@ -980,9 +1000,24 @@ var STATE_GLOW_RGBS = {
 var layer = null, calibrating = false, calBuffer = [], last = {x:0, y:0, z:0}, evCount = 0, vibWindow = [];
 var chartData = []; // Хранит историю точек для Canvas
 
+// ---- Logger state ----
+var telemetryLog = [], isLogging = false, markerCount = 0, lastLogT = null;
+// Доп. каналы (best-effort; могут отсутствовать на устройстве)
+var lastGyro = { alpha: null, beta: null, gamma: null };   // deviceorientation (углы)
+var lastRot  = { a: null, b: null, g: null };              // rotationRate (гироскоп, °/с)
+var hasGyro = false;
+window.addEventListener("deviceorientation", function(e){
+  if (e.alpha == null && e.beta == null && e.gamma == null) return;
+  lastGyro = { alpha: e.alpha, beta: e.beta, gamma: e.gamma };
+  hasGyro = true;
+}, true);
+
 // Высокочастотный фильтр гравитации
 var gravity = { x: 0, y: 0, z: 0 };
 var isGravityInitialized = false;
+// Опорная ориентация гравитации (база наклона). Захватывается при первой калибровке.
+var gravityRef = null;          // {x,y,z}, нормированный вектор "телефон в покое"
+var tiltBaselineFrames = 0;     // сколько кадров усреднили в опору
 
 function toFrame(ax, ay, az, t) {
   if (!isGravityInitialized) {
@@ -1006,6 +1041,18 @@ function toFrame(ax, ay, az, t) {
   vibWindow.push(mag);
   if (vibWindow.length > 8) vibWindow.shift();
 
+  // --- Наклон телефона как медленный позиционный дрейф ---
+  // Направление вектора гравитации = ориентация телефона. Медленный крен
+  // (рука/держатель сползает от усталости) поворачивает этот вектор.
+  // position = угол (рад) между текущей гравитацией и опорной ориентацией покоя.
+  var gMag = Math.sqrt(gravity.x*gravity.x + gravity.y*gravity.y + gravity.z*gravity.z) || 1e-9;
+  var tiltAngle = 0;
+  if (gravityRef) {
+    var dot = (gravity.x*gravityRef.x + gravity.y*gravityRef.y + gravity.z*gravityRef.z) / gMag;
+    dot = Math.max(-1, Math.min(1, dot)); // защита от выхода за [-1,1] из-за округлений
+    tiltAngle = Math.acos(dot); // 0 = как в покое, растёт при крене
+  }
+
   // Добавляем во временную базу графика
   chartData.push({x: lx, y: ly, z: lz});
   if (chartData.length > 100) chartData.shift();
@@ -1017,11 +1064,18 @@ function toFrame(ax, ay, az, t) {
     torque: ly,
     current: Math.abs(lz),
     temperature: 0,
-    position: 0,
+    position: tiltAngle,
     velocity: mag,
     vibration: vibWindow.slice(),
     tactile: [Math.abs(lx), Math.abs(ly)]
   };
+}
+
+function captureGravityRef() {
+  // Опора наклона = направление сглаженной гравитации в покое на момент калибровки.
+  var gMag = Math.sqrt(gravity.x*gravity.x + gravity.y*gravity.y + gravity.z*gravity.z) || 1e-9;
+  gravityRef = { x: gravity.x/gMag, y: gravity.y/gMag, z: gravity.z/gMag };
+  tiltBaselineFrames++;
 }
 
 function diag(msg, cls) {
@@ -1034,6 +1088,10 @@ function onMotion(e) {
   var a = e.accelerationIncludingGravity || e.acceleration;
   if (!a || (a.x == null && a.y == null && a.z == null)) return;
   last = { x: a.x || 0, y: a.y || 0, z: a.z || 0 };
+  if (e.rotationRate && (e.rotationRate.alpha != null || e.rotationRate.beta != null || e.rotationRate.gamma != null)) {
+    lastRot = { a: e.rotationRate.alpha, b: e.rotationRate.beta, g: e.rotationRate.gamma };
+    hasGyro = true;
+  }
   evCount++;
 }
 
@@ -1093,8 +1151,9 @@ function beginCalibration() {
     if (performance.now() - t0 < 2000) {
       requestAnimationFrame(tick);
     } else {
+      captureGravityRef();
       layer = new AscWrFrontalEdgeLayer({
-        drift: { keys: ["load", "motion"], window: 14, leak: 0.08, rateDeadband: 0.15, tHigh: 2.8, tLow: 1.2 }
+        drift: { keys: ["load", "motion", "tilt"], window: 14, leak: 0.08, rateDeadband: 0.15, tHigh: 2.8, tLow: 1.2 }
       });
       try {
         layer.calibrate(calBuffer);
@@ -1130,7 +1189,31 @@ function loop() {
     }
     
     var ex = v.explanation;
-    
+
+    // ---- Telemetry capture ----
+    if (isLogging) {
+      var nowT = frameData.timestamp;
+      var dt = (lastLogT == null) ? 0 : (nowT - lastLogT);
+      lastLogT = nowT;
+      telemetryLog.push({
+        t: nowT,
+        dt: Number(dt.toFixed(2)),
+        raw_accel: { x: last.x, y: last.y, z: last.z },          // до LPF
+        filtered_linear: { x: frameData.force, y: frameData.torque, z: frameData.current },
+        tilt_rad: Number((frameData.position || 0).toFixed(4)),   // наклон от опоры покоя, рад
+        gyro_rate: hasGyro ? { a: lastRot.a, b: lastRot.b, g: lastRot.g } : null,   // rotationRate, °/с
+        orientation: hasGyro ? { alpha: lastGyro.alpha, beta: lastGyro.beta, gamma: lastGyro.gamma } : null,
+        verdict: { state: v.state, confidence: v.confidence, action: v.action, adaptBlocked: v.dangerousAdaptationBlocked },
+        metrics: {
+          speed: ex.driftSpeed, distance: ex.driftDistance, irreversibility: ex.irreversibility,
+          driftMagnitude: ex.driftMagnitude, driftAlarm: ex.driftAlarm,
+          fault_risk: ex.faultRisk, local_risk: ex.localRisk,
+          context_shift_risk: ex.contextShiftRisk, severe_risk: ex.severeRisk
+        }
+      });
+      logStatus.textContent = "Запись: " + telemetryLog.length + " кадров · маркеров: " + markerCount;
+    }
+
     // Обновление UI
     $("stateText").textContent = v.state;
     $("actionText").textContent = "→ " + v.action + (v.dangerousAdaptationBlocked ? " · Адаптация ЗАБЛОКИРОВАНА" : "");
@@ -1263,6 +1346,7 @@ $("recalBtn").addEventListener("click", function() {
     if (performance.now() - t0 < 2000) {
       requestAnimationFrame(tick);
     } else {
+      captureGravityRef();
       try {
         layer.calibrate(calBuffer);
         diag("✔ Рекалибровка нормы завершена успешно!", "log-ok");
@@ -1272,6 +1356,55 @@ $("recalBtn").addEventListener("click", function() {
       calibrating = false;
     }
   })();
+});
+
+// ---- Logger controls ----
+var startLogBtn = $("startLogBtn"), stopLogBtn = $("stopLogBtn"),
+    markBtn = $("markBtn"), logStatus = $("logStatus"), logMode = $("logMode");
+
+startLogBtn.addEventListener("click", function() {
+  telemetryLog = []; isLogging = true; markerCount = 0; lastLogT = null;
+  startLogBtn.disabled = true; stopLogBtn.disabled = false;
+  markBtn.disabled = false; logMode.disabled = true;
+  $("logChannels").textContent = "каналы: accel" + (hasGyro ? " + gyro" : " (gyro нет)");
+  logStatus.textContent = "Запись активна…";
+  logStatus.style.color = "#ff4d5e";
+});
+
+markBtn.addEventListener("click", function() {
+  if (!isLogging) return;
+  markerCount++;
+  telemetryLog.push({ t: performance.now(), marker: "nod_off", marker_index: markerCount });
+  logStatus.textContent = "⚑ Маркер #" + markerCount + " · кадров: " + telemetryLog.length;
+});
+
+stopLogBtn.addEventListener("click", function() {
+  isLogging = false;
+  startLogBtn.disabled = false; stopLogBtn.disabled = true;
+  markBtn.disabled = true; logMode.disabled = false;
+  if (telemetryLog.length === 0) {
+    logStatus.textContent = "Нет данных для сохранения.";
+    logStatus.style.color = "var(--text-muted)"; return;
+  }
+  var blob = new Blob([JSON.stringify({
+    session_metadata: {
+      client_timestamp: Date.now(),
+      mode: logMode.value,
+      hardware: navigator.userAgent,
+      had_gyro: hasGyro,
+      total_frames: telemetryLog.filter(function(r){ return !r.marker; }).length,
+      total_markers: markerCount
+    },
+    payload: telemetryLog
+  })], { type: "application/json" });
+  var url = URL.createObjectURL(blob);
+  var aEl = document.createElement("a");
+  aEl.href = url;
+  aEl.download = "asc_wr_log_" + logMode.value + "_" + Date.now() + ".json";
+  document.body.appendChild(aEl); aEl.click(); aEl.remove();
+  URL.revokeObjectURL(url);
+  logStatus.textContent = "Файл сохранён. Кадров: " + telemetryLog.length + " · маркеров: " + markerCount;
+  logStatus.style.color = "var(--color-normal)";
 });
 
 </script>
