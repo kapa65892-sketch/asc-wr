@@ -1362,11 +1362,35 @@ $("recalBtn").addEventListener("click", function() {
 var startLogBtn = $("startLogBtn"), stopLogBtn = $("stopLogBtn"),
     markBtn = $("markBtn"), logStatus = $("logStatus"), logMode = $("logMode");
 
+// --- Wake Lock: не давать экрану/записи гаснуть во время поездки ---
+var wakeLock = null;
+async function acquireWakeLock() {
+  try {
+    if ('wakeLock' in navigator) {
+      wakeLock = await navigator.wakeLock.request('screen');
+      wakeLock.addEventListener('release', function(){ wakeLock = null; });
+      return true;
+    }
+  } catch (e) { /* отказ — не критично, запись продолжается */ }
+  return false;
+}
+function releaseWakeLock() {
+  try { if (wakeLock) { wakeLock.release(); wakeLock = null; } } catch (e) {}
+}
+// Если система отняла блокировку (свернули/вернули вкладку) — вернуть, пока пишем.
+document.addEventListener('visibilitychange', function(){
+  if (isLogging && document.visibilityState === 'visible' && wakeLock === null) {
+    acquireWakeLock();
+  }
+});
+
 startLogBtn.addEventListener("click", function() {
   telemetryLog = []; isLogging = true; markerCount = 0; lastLogT = null;
   startLogBtn.disabled = true; stopLogBtn.disabled = false;
   markBtn.disabled = false; logMode.disabled = true;
-  $("logChannels").textContent = "каналы: accel" + (hasGyro ? " + gyro" : " (gyro нет)");
+  acquireWakeLock().then(function(ok){
+    $("logChannels").textContent = "каналы: accel" + (hasGyro ? " + gyro" : " (gyro нет)") + (ok ? " · экран держится" : "");
+  });
   logStatus.textContent = "Запись активна…";
   logStatus.style.color = "#ff4d5e";
 });
@@ -1380,6 +1404,7 @@ markBtn.addEventListener("click", function() {
 
 stopLogBtn.addEventListener("click", function() {
   isLogging = false;
+  releaseWakeLock();
   startLogBtn.disabled = false; stopLogBtn.disabled = true;
   markBtn.disabled = true; logMode.disabled = false;
   if (telemetryLog.length === 0) {
