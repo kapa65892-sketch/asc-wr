@@ -486,7 +486,6 @@
         <button class="btn btn-primary" id="startLogBtn" style="padding:12px; font-size:11px; background:#ff4d5e;">● Запись</button>
         <button class="btn btn-secondary" id="stopLogBtn" style="padding:12px; font-size:11px;" disabled>■ Стоп / Скачать</button>
       </div>
-      <button class="btn btn-secondary" id="markBtn" style="padding:14px; font-size:12px; background:rgba(255,170,40,0.18); border:1px solid rgba(255,170,40,0.4);" disabled>⚑ Клюнул носом (маркер)</button>
       <div id="logStatus" style="font-size:10px; text-align:center; color:var(--text-muted);">Логгер остановлен. Кадров: 0 · маркеров: 0</div>
     </div>
 
@@ -1360,7 +1359,7 @@ $("recalBtn").addEventListener("click", function() {
 
 // ---- Logger controls ----
 var startLogBtn = $("startLogBtn"), stopLogBtn = $("stopLogBtn"),
-    markBtn = $("markBtn"), logStatus = $("logStatus"), logMode = $("logMode");
+    logStatus = $("logStatus"), logMode = $("logMode");
 
 // --- Wake Lock: не давать экрану/записи гаснуть во время поездки ---
 var wakeLock = null;
@@ -1387,7 +1386,7 @@ document.addEventListener('visibilitychange', function(){
 startLogBtn.addEventListener("click", function() {
   telemetryLog = []; isLogging = true; markerCount = 0; lastLogT = null;
   startLogBtn.disabled = true; stopLogBtn.disabled = false;
-  markBtn.disabled = false; logMode.disabled = true;
+  logMode.disabled = true;
   acquireWakeLock().then(function(ok){
     $("logChannels").textContent = "каналы: accel" + (hasGyro ? " + gyro" : " (gyro нет)") + (ok ? " · экран держится" : "");
   });
@@ -1395,18 +1394,11 @@ startLogBtn.addEventListener("click", function() {
   logStatus.style.color = "#ff4d5e";
 });
 
-markBtn.addEventListener("click", function() {
-  if (!isLogging) return;
-  markerCount++;
-  telemetryLog.push({ t: performance.now(), marker: "nod_off", marker_index: markerCount });
-  logStatus.textContent = "⚑ Маркер #" + markerCount + " · кадров: " + telemetryLog.length;
-});
-
 stopLogBtn.addEventListener("click", function() {
   isLogging = false;
   releaseWakeLock();
   startLogBtn.disabled = false; stopLogBtn.disabled = true;
-  markBtn.disabled = true; logMode.disabled = false;
+  logMode.disabled = false;
   if (telemetryLog.length === 0) {
     logStatus.textContent = "Нет данных для сохранения.";
     logStatus.style.color = "var(--text-muted)"; return;
