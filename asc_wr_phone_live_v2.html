@@ -1011,6 +1011,23 @@ window.addEventListener("deviceorientation", function(e){
   hasGyro = true;
 }, true);
 
+// --- Магнитометр (магнитовизор): ловит магнит-медальон на груди ---
+var lastMag = { x: null, y: null, z: null };   // магнитное поле, мкТл
+var hasMag = false;
+(function initMagnetometer(){
+  try {
+    if (typeof Magnetometer !== "undefined") {
+      var mag = new Magnetometer({ frequency: 30 });
+      mag.addEventListener("reading", function(){
+        lastMag = { x: mag.x, y: mag.y, z: mag.z };
+        hasMag = true;
+      });
+      mag.addEventListener("error", function(){ /* нет доступа — не критично */ });
+      mag.start();
+    }
+  } catch (e) { /* магнитометра нет или нет разрешения */ }
+})();
+
 // Высокочастотный фильтр гравитации
 var gravity = { x: 0, y: 0, z: 0 };
 var isGravityInitialized = false;
@@ -1202,6 +1219,7 @@ function loop() {
         tilt_rad: Number((frameData.position || 0).toFixed(4)),   // наклон от опоры покоя, рад
         gyro_rate: hasGyro ? { a: lastRot.a, b: lastRot.b, g: lastRot.g } : null,   // rotationRate, °/с
         orientation: hasGyro ? { alpha: lastGyro.alpha, beta: lastGyro.beta, gamma: lastGyro.gamma } : null,
+        mag_field: hasMag ? { x: lastMag.x, y: lastMag.y, z: lastMag.z } : null,    // магнитное поле, мкТл (магнитовизор)
         verdict: { state: v.state, confidence: v.confidence, action: v.action, adaptBlocked: v.dangerousAdaptationBlocked },
         metrics: {
           speed: ex.driftSpeed, distance: ex.driftDistance, irreversibility: ex.irreversibility,
@@ -1388,7 +1406,7 @@ startLogBtn.addEventListener("click", function() {
   startLogBtn.disabled = true; stopLogBtn.disabled = false;
   logMode.disabled = true;
   acquireWakeLock().then(function(ok){
-    $("logChannels").textContent = "каналы: accel" + (hasGyro ? " + gyro" : " (gyro нет)") + (ok ? " · экран держится" : "");
+    $("logChannels").textContent = "каналы: accel" + (hasGyro ? " + gyro" : "") + (hasMag ? " + магнит" : "") + (ok ? " · экран держится" : "");
   });
   logStatus.textContent = "Запись активна…";
   logStatus.style.color = "#ff4d5e";
@@ -1409,6 +1427,7 @@ stopLogBtn.addEventListener("click", function() {
       mode: logMode.value,
       hardware: navigator.userAgent,
       had_gyro: hasGyro,
+      had_mag: hasMag,
       total_frames: telemetryLog.filter(function(r){ return !r.marker; }).length,
       total_markers: markerCount
     },
