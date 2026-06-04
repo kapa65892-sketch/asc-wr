@@ -1,0 +1,530 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>ASC-WR NextGen Live (v5 · каменный якорь)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg-dark: #07090e;
+    --panel-bg: rgba(18, 24, 38, 0.7);
+    --panel-border: rgba(255, 255, 255, 0.08);
+    --text-primary: #f0f4f9;
+    --text-muted: #8595ae;
+    --accent: #2dd4a7;
+    --color-normal-h: 163; --color-normal: hsl(var(--color-normal-h), 70%, 50%);
+    --color-drift-h: 38;   --color-drift:  hsl(var(--color-drift-h), 90%, 55%);
+    --color-wound-h: 210;  --color-wound:  hsl(var(--color-wound-h), 85%, 60%);
+    --color-fault-h: 350;  --color-fault:  hsl(var(--color-fault-h), 85%, 55%);
+    --color-shift-h: 250;  --color-shift:  hsl(var(--color-shift-h), 75%, 65%);
+    --color-mag: #9b8cff;
+    --color-calm: #58677c;
+    --font-ui: 'Inter', sans-serif;
+    --font-mono: 'JetBrains Mono', monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  body {
+    background: radial-gradient(circle at 50% 0%, #111a2e 0%, var(--bg-dark) 70%);
+    color: var(--text-primary); font-family: var(--font-ui);
+    min-height: 100vh; padding: 20px 16px; display: flex; flex-direction: column; gap: 16px;
+    max-width: 480px; margin: 0 auto;
+  }
+  header { text-align: center; margin-bottom: 5px; }
+  .logo { font-size: 11px; font-weight: 700; letter-spacing: 3px; color: var(--text-muted); text-transform: uppercase; }
+  .logo span { color: var(--accent); text-shadow: 0 0 10px rgba(45, 212, 167, 0.4); }
+  .logo-sub { font-size: 14px; font-weight: 300; color: var(--text-primary); margin-top: 4px; }
+  .disclaimer { margin: 0; padding: 12px; background: rgba(245, 166, 35, 0.15); border: 1px solid rgba(245, 166, 35, 0.4); border-radius: 12px; font-size: 10px; line-height: 1.4; color: #f5a623; text-align: center; }
+  .panel { background: var(--panel-bg); border: 1px solid var(--panel-border); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); border-radius: 20px; padding: 20px; position: relative; overflow: hidden; box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.4); }
+  .core-display { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 24px 10px; gap: 12px; }
+  .reactor-orb { width: 110px; height: 110px; border-radius: 50%; background: radial-gradient(circle at 35% 35%, rgba(255,255,255,0.15) 0%, rgba(0,0,0,0.6) 80%); border: 2px solid var(--state-color, var(--color-normal)); box-shadow: inset 0 0 20px var(--state-color, var(--color-normal)), 0 0 30px rgba(var(--state-glow-rgb, 45, 212, 167), 0.35); display: flex; align-items: center; justify-content: center; position: relative; transition: all 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
+  .reactor-orb::after { content: ''; position: absolute; width: 80%; height: 80%; border-radius: 50%; background: var(--state-color, var(--color-normal)); opacity: 0.15; filter: blur(8px); animation: pulse 2s infinite ease-in-out; }
+  .reactor-label { font-family: var(--font-mono); font-size: 10px; letter-spacing: 2px; color: var(--text-muted); text-transform: uppercase; }
+  .reactor-state-text { font-size: 20px; font-weight: 700; color: var(--state-color, var(--color-normal)); text-shadow: 0 0 15px rgba(var(--state-glow-rgb, 45, 212, 167), 0.3); text-align: center; letter-spacing: 0.5px; }
+  .reactor-action-text { font-family: var(--font-mono); font-size: 11px; color: var(--text-muted); background: rgba(0, 0, 0, 0.25); padding: 4px 12px; border-radius: 99px; border: 1px solid var(--panel-border); margin-top: 4px; text-align:center; }
+  .metrics-grid { display: flex; flex-direction: column; gap: 12px; }
+  .metric-card { display: grid; grid-template-columns: 90px 1fr 66px; align-items: center; gap: 12px; }
+  .metric-label { font-family: var(--font-mono); font-size: 11px; color: var(--text-muted); text-transform: uppercase; }
+  .progress-bar-container { height: 8px; background: rgba(0, 0, 0, 0.4); border-radius: 99px; border: 1px solid rgba(255, 255, 255, 0.03); overflow: hidden; position: relative; }
+  .progress-fill { height: 100%; width: 0%; border-radius: 99px; background: var(--accent); box-shadow: 0 0 8px var(--accent); transition: width 0.15s cubic-bezier(0.1, 0.8, 0.25, 1); }
+  .metric-value { font-family: var(--font-mono); font-size: 12px; text-align: right; font-weight: 700; }
+  .chart-container { padding: 10px; background: rgba(0, 0, 0, 0.3); border-radius: 14px; border: 1px solid rgba(255, 255, 255, 0.03); display: flex; flex-direction: column; gap: 6px; }
+  .chart-title { font-size: 10px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px; display: flex; justify-content: space-between; }
+  canvas { width: 100%; height: 70px; display: block; background: #040508; border-radius: 8px; }
+  .btn { width: 100%; padding: 18px; border: none; border-radius: 16px; font-family: var(--font-ui); font-size: 14px; font-weight: 700; cursor: pointer; text-transform: uppercase; letter-spacing: 1px; transition: all 0.2s ease; box-shadow: 0 4px 15px rgba(0,0,0,0.2); }
+  .btn-primary { background: linear-gradient(135deg, var(--accent) 0%, #1bb88f 100%); color: #031410; }
+  .btn-primary:active { transform: translateY(1px); }
+  .btn-secondary { background: rgba(31, 42, 58, 0.4); border: 1px solid rgba(255, 255, 255, 0.05); color: var(--text-primary); }
+  .input-field { background: rgba(0,0,0,0.3); border: 1px solid var(--panel-border); color: #fff; padding: 12px; border-radius: 8px; font-family: var(--font-ui); width: 100%; }
+  #diagLog { background: #040508; border: 1px solid rgba(255, 255, 255, 0.05); border-radius: 12px; padding: 12px; font-family: var(--font-mono); font-size: 10px; line-height: 1.5; height: 90px; overflow-y: auto; white-space: pre-wrap; color: #8fa1b3; }
+  .hidden { display: none !important; }
+  @keyframes orb-pulse-fast { 0% { transform: scale(0.98); } 50% { transform: scale(1.03); box-shadow: inset 0 0 30px var(--state-color), 0 0 45px rgba(var(--state-glow-rgb), 0.7); } 100% { transform: scale(0.98); } }
+  .pulse-fast { animation: orb-pulse-fast 0.3s infinite ease-in-out !important; }
+  .pulse-slow { animation: orb-pulse-fast 1.0s infinite ease-in-out !important; }
+</style>
+</head>
+<body>
+  <header>
+    <div class="logo">ASC-WR <span>Frontal Edge</span></div>
+    <div class="logo-sub">Выпаренная руда · V5 (каменный якорь + магнит-канал)</div>
+  </header>
+
+  <div class="disclaimer">
+    <strong>ВНИМАНИЕ!</strong> Эта программа — лишь дополнительная попытка подстраховать.
+    ОНА НЕ ДАЁТ НИКАКИХ ГАРАНТИЙ и не заменяет отдых и бдительность на дороге.
+  </div>
+
+  <div id="setupScreen" style="display: flex; flex-direction: column; gap: 15px;">
+    <div class="panel" style="display: flex; flex-direction: column; gap: 10px;">
+      <div style="font-size: 11px; font-weight: bold; color: var(--text-muted); text-transform: uppercase;">Настройки пробуждения (Аудио)</div>
+      <input type="text" id="alarmPhrase" class="input-field" value="Игорь, проснись! Не спать!" placeholder="Фраза для пробуждения (до 5 слов)">
+      <select id="voiceSelect" class="input-field"><option value="">Загрузка голосов...</option></select>
+      <select id="langSelect" class="input-field">
+        <option value="ru-RU">Язык синтеза: Русский</option>
+        <option value="en-US">Язык синтеза: English</option>
+      </select>
+      <button class="btn btn-secondary" id="testVoiceBtn" style="padding: 12px; font-size: 12px;">🔊 Проверить голос</button>
+    </div>
+    <div class="panel" style="display: flex; flex-direction: column; gap: 15px;">
+      <div class="core-display" style="padding: 5px;">
+        <div class="reactor-orb" style="--state-color: var(--accent); --state-glow-rgb: 45, 212, 167; width: 60px; height: 60px;"></div>
+      </div>
+      <div id="diagLog">Модуль V5 загружен. Каменный якорь: норма не сползает под дрейфом. Настройте голос и активируйте сенсоры.</div>
+      <button class="btn btn-primary" id="startBtn">▶ Активировать компаратор</button>
+    </div>
+  </div>
+
+  <div id="runtimeScreen" class="hidden" style="display: flex; flex-direction: column; gap: 12px;">
+    <div class="panel core-display" id="stagePanel">
+      <div class="reactor-orb" id="reactorOrb"></div>
+      <div class="reactor-label" style="margin-top: 8px;">Текущий вердикт коры:</div>
+      <div class="reactor-state-text" id="stateText">—</div>
+      <div class="reactor-action-text" id="actionText">—</div>
+    </div>
+    <div class="panel chart-container">
+      <div class="chart-title"><span>Паттерн дыхания (Respiration Wave)</span></div>
+      <canvas id="liveChart"></canvas>
+    </div>
+    <div class="panel metrics-grid">
+      <div class="metric-card"><div class="metric-label">Tilt Drift</div><div class="progress-bar-container"><div class="progress-fill" id="barSlowDrift"></div></div><div class="metric-value" id="valSlowDrift">0.0</div></div>
+      <div class="metric-card"><div class="metric-label">Gyro Tone</div><div class="progress-bar-container"><div class="progress-fill" id="barTone"></div></div><div class="metric-value" id="valTone">0.0</div></div>
+      <div class="metric-card"><div class="metric-label">Breathing</div><div class="progress-bar-container"><div class="progress-fill" id="barBreath" style="background:var(--color-shift); box-shadow:0 0 8px var(--color-shift)"></div></div><div class="metric-value" id="valBreath">0.0</div></div>
+      <div class="metric-card"><div class="metric-label">Synergy</div><div class="progress-bar-container"><div class="progress-fill" id="barSynergy" style="background:var(--color-wound); box-shadow:0 0 8px var(--color-wound)"></div></div><div class="metric-value" id="valSynergy">0/3</div></div>
+      <div class="metric-card"><div class="metric-label">Магнит °</div><div class="progress-bar-container"><div class="progress-fill" id="barMag" style="background:var(--color-mag); box-shadow:0 0 8px var(--color-mag)"></div></div><div class="metric-value" id="valMag">—</div></div>
+      <div class="metric-card"><div class="metric-label">Магн-дрейф</div><div class="progress-bar-container"><div class="progress-fill" id="barMagDrift" style="background:#6f7dff; box-shadow:0 0 8px #6f7dff"></div></div><div class="metric-value" id="valMagDrift">набл.</div></div>
+    </div>
+    <button class="btn btn-secondary" id="recalBtn">Рекалибровка базовой нормы</button>
+  </div>
+
+<script>
+"use strict";
+// =============================================================================
+//  ASC-WR  v5  —  что изменено против v4 (читать перед правкой):
+//
+//  ИСПРАВЛЕНО (две причины "истинного несрабатывания" в v4):
+//   (1) Каменный якорь. В v4 anchor медленно подползал к сигналу (anchorTau),
+//       и замораживался ТОЛЬКО при сильной монотонности. Рябь-борьба (подпись
+//       предсна по манифесту) немонотонна -> v4 вучивал её в норму -> пропуск.
+//       Теперь: якорь НЕ двигается, пока дрейф подозревается (distance>deadband).
+//       Норма пересаживается только на ПОДТВЕРЖДЁННОЕ плато (сигнал сел и не
+//       прогрессирует settleWindow тиков). Рябь плато не даёт -> якорь стоит.
+//   (2) Кочки больше не стирают норму. В v4 любой быстрый скачок (slowRate>порог)
+//       мгновенно пересаживал якорь -> на тряской дороге норма обнулялась ->
+//       дрейф не копился -> пропуск. Теперь скачок сам по себе ничего не сбрасывает;
+//       пересадка только после устойчивого плато, которого кочка не создаёт.
+//
+//  ДОБАВЛЕНО:
+//   (3) Гистерезис тревоги ("хищник не дёргается"): DEEP взводится только после
+//       fireNeed подряд, гаснет после clearNeed тишины. Голос — пока взведено.
+//   (4) Магнитный канал — ВИДИМЫЙ. Если браузер отдаёт компас — показывает курс
+//       и его дрейф; если режет — пишет "нет". Канал НАБЛЮДАЕМЫЙ, в тревогу НЕ
+//       входит (нет размеченных данных, что магнитный дрейф значит для предсна;
+//       к тому же в машине курс = повороты авто, а не состояние тела).
+//
+//  ПЯТЬ РУЧЕК калибровки (подбираются на РЕАЛЬНЫХ данных, см. конструкторы):
+//       fastTau/slowTau (сглаживание), deadband (зона "ещё норма"),
+//       settleWindow/settleRate (когда поза = новая норма), earlyDrift (порог).
+// =============================================================================
+
+var $ = function(id){ return document.getElementById(id); };
+function clamp(x, lo, hi){ return Math.max(lo, Math.min(hi, x)); }
+function scalar(v, f){ return Number.isFinite(v) ? v : (f||0); }
+
+// =============================================================================
+// TTS ALARM
+// =============================================================================
+var synth = window.speechSynthesis;
+var systemVoices = [];
+function populateVoiceList() {
+  systemVoices = synth.getVoices();
+  var voiceSelect = $("voiceSelect"); voiceSelect.innerHTML = '';
+  var sorted = systemVoices.slice().sort(function(a,b){
+    if (a.lang.indexOf("ru")>-1 && b.lang.indexOf("ru")<0) return -1;
+    if (a.lang.indexOf("ru")<0 && b.lang.indexOf("ru")>-1) return 1;
+    return a.name.localeCompare(b.name);
+  });
+  if (sorted.length === 0) { voiceSelect.innerHTML = '<option value="">Нет доступных голосов</option>'; return; }
+  sorted.forEach(function(voice, i){
+    var o = document.createElement('option');
+    o.textContent = voice.name + ' (' + voice.lang + ')' + (voice.default ? ' -- DEFAULT' : '');
+    o.setAttribute('data-name', voice.name);
+    if (voice.name.toLowerCase().indexOf("milena")>-1 || voice.name.toLowerCase().indexOf("female")>-1) o.selected = true;
+    else if (i === 0) o.selected = true;
+    voiceSelect.appendChild(o);
+  });
+}
+populateVoiceList();
+if (speechSynthesis.onvoiceschanged !== undefined) speechSynthesis.onvoiceschanged = populateVoiceList;
+
+function speakAlarm() {
+  if (synth.speaking) return; // self-guard: re-fires as soon as previous finishes
+  var phrase = $("alarmPhrase").value || "Проснись!";
+  var u = new SpeechSynthesisUtterance(phrase);
+  var opt = $("voiceSelect").selectedOptions[0];
+  if (opt) {
+    var name = opt.getAttribute('data-name');
+    u.lang = $("langSelect").value;
+    for (var i=0;i<systemVoices.length;i++){ if (systemVoices[i].name === name){ u.voice = systemVoices[i]; break; } }
+  }
+  u.pitch = 1.2; u.rate = 1.1;
+  synth.speak(u);
+}
+$("testVoiceBtn").addEventListener("click", speakAlarm);
+
+// =============================================================================
+// SLOW DRIFT DETECTOR  (каменный якорь)
+// =============================================================================
+class SlowDriftDetector {
+  constructor(opts){
+    opts = opts || {};
+    this.fastTau       = opts.fastTau       || 0.15;
+    this.slowTau       = opts.slowTau       || 0.01;
+    this.activityWindow= opts.activityWindow|| 30;
+    this.quietThreshold= opts.quietThreshold|| 0.6;
+    this.monotonWindow = opts.monotonWindow || 40;
+    // --- ручки каменного якоря ---
+    this.deadband      = (opts.deadband      != null) ? opts.deadband      : 0.05;   // ниже -> "ещё норма"
+    this.settleRate    = (opts.settleRate    != null) ? opts.settleRate    : 0.0008; // |изм. slow|/тик ниже = "сел"
+    this.settleWindow  = (opts.settleWindow  != null) ? opts.settleWindow  : 600;    // тиков плато до пересадки нормы
+    this.normTau       = (opts.normTau       != null) ? opts.normTau       : 0.0004; // тихий уход якоря ТОЛЬКО когда мы НА норме
+    this.reset();
+  }
+  reset(){
+    this.fast=null; this.slow=null; this.anchor=null;
+    this.recent=[]; this.slowHistory=[];
+    this.inWorkingZone=false; this.quietStreak=0;
+    this._prevSlow=null; this._peak=0;
+    this._settleStreak=0; this._settleLevel=null;
+  }
+  update(value){
+    var v = scalar(value);
+    if (this.fast===null){ this.fast=v; this.slow=v; this.anchor=v; }
+    this.fast = this.fast*(1-this.fastTau) + v*this.fastTau;
+    this.slow = this.slow*(1-this.slowTau) + v*this.slowTau;
+
+    // войти в рабочую зону по затишью и положить КАМЕННЫЙ якорь один раз
+    var jitter = Math.abs(this.fast - this.slow);
+    this.recent.push(jitter); if (this.recent.length>this.activityWindow) this.recent.shift();
+    var activity = this.recent.reduce(function(a,b){return a+b;},0)/this.recent.length;
+    if (activity < this.quietThreshold) this.quietStreak++; else this.quietStreak = 0;
+    if (!this.inWorkingZone && this.quietStreak >= this.activityWindow){
+      this.inWorkingZone = true; this.anchor = this.slow;   // свет, запасённый до темноты
+      this.slowHistory=[]; this._peak=0; this._settleStreak=0; this._settleLevel=null;
+    }
+
+    var slowRate = Math.abs(this.slow - (this._prevSlow!=null ? this._prevSlow : this.slow));
+    this._prevSlow = this.slow;
+
+    var slowDrift=0, distance=0, monotonic=0, returning=false, suspected=false, reanchored=false;
+
+    if (this.inWorkingZone){
+      slowDrift = this.slow - this.anchor;
+      distance  = Math.abs(slowDrift);
+
+      // монотонность (ДИАГНОСТИКА, НЕ гейт вучивания)
+      this.slowHistory.push(this.slow); if (this.slowHistory.length>this.monotonWindow) this.slowHistory.shift();
+      var up=0, down=0;
+      for (var i=1;i<this.slowHistory.length;i++){ var d=this.slowHistory[i]-this.slowHistory[i-1]; if (d>0) up++; else if (d<0) down++; }
+      monotonic = Math.abs(up-down)/((up+down)||1);
+
+      this._peak = Math.max(this._peak*0.999, distance);
+      returning = this._peak>this.deadband && distance < this._peak*0.5;
+
+      suspected = distance > this.deadband;
+
+      if (!suspected){
+        // мы НА норме: разрешён лишь крошечный честный уход к истинной базе
+        this.anchor = this.anchor*(1-this.normTau) + this.slow*this.normTau;
+        this._settleStreak=0; this._settleLevel=null;
+      } else {
+        // ушли от нормы: якорь НИКОГДА не ползёт к дрейфу.
+        // новую норму принимаем ТОЛЬКО на подтверждённом плато
+        // (сел: малый темп И не прогрессирует) settleWindow тиков.
+        var progressing = (monotonic > 0.4 && !returning);     // ещё ползёт -> это дрейф, не плато
+        var stableNow   = (slowRate < this.settleRate) && !progressing;
+        if (stableNow){
+          if (this._settleLevel===null || Math.abs(this.slow-this._settleLevel) < this.deadband){
+            if (this._settleLevel===null) this._settleLevel = this.slow;
+            this._settleStreak++;
+          } else { this._settleLevel = this.slow; this._settleStreak = 0; }
+        } else { this._settleStreak = 0; this._settleLevel = null; }
+
+        if (this._settleStreak >= this.settleWindow){
+          this.anchor = this.slow;                              // устойчивая поза = новая норма
+          this._peak=0; this._settleStreak=0; this._settleLevel=null; reanchored=true;
+        }
+      }
+    }
+
+    return { inWorkingZone:this.inWorkingZone, activity:activity,
+             slowDriftAbs:distance, slowRate:slowRate, monotonic:monotonic,
+             returning:returning, suspected:suspected, reanchored:reanchored };
+  }
+}
+
+// =============================================================================
+// TONE / BREATH  (без изменений — баг вучивания их не касается)
+// =============================================================================
+class ToneFadeDetector {
+  constructor(){ this.fastTau=0.1; this.baseTau=0.003; this.spikeClip=50; this.fadeRatio=0.40; this.baseMin=1.0; this.reset(); }
+  reset(){ this.fast=null; this.base=null; }
+  update(value){
+    var v = Math.min(scalar(value), this.spikeClip);
+    if (this.fast===null){ this.fast=v; this.base=v; }
+    this.fast = this.fast*(1-this.fastTau) + v*this.fastTau;
+    if (this.fast > this.base) this.base = this.base*(1-this.baseTau*3) + this.fast*(this.baseTau*3);
+    else this.base = this.base*(1-this.baseTau) + this.fast*this.baseTau;
+    var hasTone = this.base > this.baseMin;
+    var ratio = hasTone ? this.fast/this.base : 1;
+    return { tone:this.base, ratio:ratio, fading: hasTone && ratio < this.fadeRatio };
+  }
+}
+class BreathingDetector {
+  constructor(){ this.fastTau=0.03; this.slowTau=0.002; this.ampTau=0.02; this.minAmplitude=0.15; this.reset(); }
+  reset(){ this.fast=null; this.slow=null; this.amplitude=0; }
+  update(value){
+    var v = scalar(value);
+    if (this.fast===null){ this.fast=v; this.slow=v; }
+    this.fast += (v-this.fast)*this.fastTau;
+    this.slow += (v-this.slow)*this.slowTau;
+    var wave = this.fast - this.slow;
+    var absWave = Math.abs(wave);
+    if (absWave > this.amplitude) this.amplitude += (absWave-this.amplitude)*0.1;
+    else this.amplitude += (absWave-this.amplitude)*this.ampTau;
+    return { wave:wave, amplitude:this.amplitude, isRhythmic: this.amplitude > this.minAmplitude };
+  }
+}
+
+// =============================================================================
+// CORE v5
+// =============================================================================
+var V_STATES = Object.freeze({ CALM:"CALM", WORKING:"WORKING", EARLY_DRIFT:"EARLY_DRIFT", DEEP_DRIFT:"DEEP_DRIFT" });
+
+class AscWrCore {
+  constructor(){
+    this.tiltDetector  = new SlowDriftDetector();                                  // наклон (рад)
+    this.toneDetector  = new ToneFadeDetector();                                   // тонус (гиро)
+    this.breathDetector= new BreathingDetector();                                  // дыхание (сила)
+    // магнит наблюдаем отдельно; ручки в градусах курса; в тревогу НЕ входит
+    this.magDetector   = new SlowDriftDetector({ deadband:3, settleRate:0.05, settleWindow:600, quietThreshold:5 });
+    this.earlyDrift = 0.35; // рад (~20°): порог одиночного раннего признака
+
+    // гистерезис тревоги
+    this.fireNeed=30; this.clearNeed=90;   // тиков (~60Гц): ~0.5с взвод, ~1.5с сброс
+    this._fireStreak=0; this._clearStreak=0; this.alarmLatched=false;
+  }
+  reset(){ this.tiltDetector.reset(); this.toneDetector.reset(); this.breathDetector.reset(); this.magDetector.reset();
+           this._fireStreak=0; this._clearStreak=0; this.alarmLatched=false; }
+  tick(frame){
+    var tilt = scalar(frame.tilt), gyro = scalar(frame.gyroMag), force = scalar(frame.velocity);
+
+    var tiltInfo  = this.tiltDetector.update(tilt);
+    var toneInfo  = this.toneDetector.update(gyro);
+    var breathInfo= this.breathDetector.update(force);
+    var magInfo   = frame.magOk ? this.magDetector.update(scalar(frame.magCont)) : { slowDriftAbs:0, inWorkingZone:false };
+
+    var slightSlouch  = tiltInfo.slowDriftAbs > this.earlyDrift * 0.4;
+    var muscleRelaxed = toneInfo.fading;
+    var deepBreathing = breathInfo.isRhythmic;
+
+    var synergyCount = (slightSlouch?1:0) + (muscleRelaxed?1:0) + (deepBreathing?1:0);
+
+    // сырой вердикт глубокого дрейфа -> через гистерезис
+    var rawDeep = (synergyCount >= 2 && tiltInfo.inWorkingZone);
+    this._fireStreak  = rawDeep ? this._fireStreak+1 : 0;
+    this._clearStreak = (synergyCount === 0) ? this._clearStreak+1 : 0;
+    if (!this.alarmLatched && this._fireStreak >= this.fireNeed) this.alarmLatched = true;
+    if (this.alarmLatched && this._clearStreak >= this.clearNeed) this.alarmLatched = false;
+
+    var state = V_STATES.CALM;
+    if (tiltInfo.inWorkingZone) state = V_STATES.WORKING;
+    if (this.alarmLatched) state = V_STATES.DEEP_DRIFT;
+    else if (tiltInfo.slowDriftAbs >= this.earlyDrift || synergyCount >= 1) state = V_STATES.EARLY_DRIFT;
+
+    return {
+      state:state, synergyCount:synergyCount,
+      tiltDrift:tiltInfo.slowDriftAbs, tone:toneInfo.tone,
+      breathWave:breathInfo.wave, breathAmp:breathInfo.amplitude,
+      muscleRelaxed:muscleRelaxed, deepBreathing:deepBreathing, slightSlouch:slightSlouch,
+      magOk:frame.magOk, magHeading:frame.magHeading, magDrift:magInfo.slowDriftAbs, magInZone:magInfo.inWorkingZone
+    };
+  }
+}
+
+// =============================================================================
+// SENSORS  (accel + gyro + магнит/компас)
+// =============================================================================
+var layer = null, last = {x:0,y:0,z:0}, lastRot = {a:0,b:0,g:0}, hasGyro = false, chartData = [];
+
+// --- магнит/компас: видимый канал, честный статус ---
+var magHeading = null, magOk = false, magCont = 0, _prevMagH = null;
+function feedMag(h){
+  if (h == null || !isFinite(h)) return;
+  magHeading = h; magOk = true;
+  if (_prevMagH === null){ _prevMagH = h; magCont = h; }
+  else { var d = h - _prevMagH; while (d>180) d-=360; while (d<-180) d+=360; magCont += d; _prevMagH = h; }
+}
+// Android Chrome: абсолютная ориентация (магнитометр-derived)
+window.addEventListener("deviceorientationabsolute", function(e){
+  if (e.alpha != null) feedMag((360 - e.alpha) % 360);
+}, true);
+// iOS Safari: webkitCompassHeading; иначе absolute alpha
+window.addEventListener("deviceorientation", function(e){
+  if (e.webkitCompassHeading != null) feedMag(e.webkitCompassHeading);
+  else if (e.absolute === true && e.alpha != null) feedMag((360 - e.alpha) % 360);
+}, true);
+// Generic Sensor API (если разрешён) — запасной путь по сырому полю
+try {
+  if ('Magnetometer' in window) {
+    var m = new Magnetometer({ frequency: 10 });
+    m.addEventListener('reading', function(){
+      // курс из горизонтальной проекции поля; грубо, но лучше "нет"
+      if (magHeading === null && m.x != null && m.y != null) {
+        feedMag(((Math.atan2(m.y, m.x) * 180/Math.PI) + 360) % 360);
+      }
+    });
+    m.addEventListener('error', function(){});
+    m.start();
+  }
+} catch (e) { /* нет доступа — канал останется "нет" */ }
+
+var gravity = {x:0,y:0,z:0}, isGravityInitialized = false, gravityRef = null;
+function toFrame(ax, ay, az, t){
+  if (!isGravityInitialized){ gravity.x=ax; gravity.y=ay; gravity.z=az; isGravityInitialized=true; }
+  var alpha = 0.98;
+  gravity.x = alpha*gravity.x + (1-alpha)*ax;
+  gravity.y = alpha*gravity.y + (1-alpha)*ay;
+  gravity.z = alpha*gravity.z + (1-alpha)*az;
+  var lx = ax-gravity.x, ly = ay-gravity.y, lz = az-gravity.z;
+  var mag = Math.sqrt(lx*lx+ly*ly+lz*lz);
+  var gMag = Math.sqrt(gravity.x*gravity.x+gravity.y*gravity.y+gravity.z*gravity.z) || 1e-9;
+  var tiltAngle = 0;
+  if (gravityRef){
+    var dot = (gravity.x*gravityRef.x + gravity.y*gravityRef.y + gravity.z*gravityRef.z)/gMag;
+    tiltAngle = Math.acos(clamp(dot,-1,1));
+  }
+  var gyroMag = hasGyro ? Math.sqrt(lastRot.a*lastRot.a+lastRot.b*lastRot.b+lastRot.g*lastRot.g) : 0;
+  return { timestamp:t, velocity:mag, tilt:tiltAngle, gyroMag:gyroMag, magOk:magOk, magHeading:magHeading, magCont:magCont };
+}
+function captureGravityRef(){
+  var gMag = Math.sqrt(gravity.x*gravity.x+gravity.y*gravity.y+gravity.z*gravity.z) || 1e-9;
+  gravityRef = { x:gravity.x/gMag, y:gravity.y/gMag, z:gravity.z/gMag };
+}
+function onMotion(e){
+  var a = e.accelerationIncludingGravity || e.acceleration; if (!a) return;
+  last = { x:a.x||0, y:a.y||0, z:a.z||0 };
+  if (e.rotationRate){ lastRot = { a:e.rotationRate.alpha||0, b:e.rotationRate.beta||0, g:e.rotationRate.gamma||0 }; hasGyro = true; }
+}
+function startDeviceMotion(){ window.addEventListener("devicemotion", onMotion, true); setTimeout(beginCalibration, 1000); }
+function beginCalibration(){
+  $("diagLog").innerHTML = "Калибровка (2 секунды покоя)...";
+  var t0 = performance.now();
+  (function tick(){
+    if (performance.now()-t0 < 2000) requestAnimationFrame(tick);
+    else {
+      captureGravityRef();
+      layer = new AscWrCore();
+      $("setupScreen").classList.add("hidden");
+      $("runtimeScreen").classList.remove("hidden");
+      loop();
+    }
+  })();
+}
+
+// =============================================================================
+// UI LOOP
+// =============================================================================
+var STATE_COLORS = { CALM:"var(--color-calm)", WORKING:"var(--accent)", EARLY_DRIFT:"var(--color-drift)", DEEP_DRIFT:"var(--color-fault)" };
+var STATE_GLOW   = { CALM:"133, 149, 174", WORKING:"45, 212, 167", EARLY_DRIFT:"245, 166, 35", DEEP_DRIFT:"255, 77, 94" };
+
+function setProgress(id, val, max){ $(id).style.width = clamp((val/max)*100, 0, 100) + "%"; }
+
+function loop(){
+  if (layer){
+    var frame = toFrame(last.x, last.y, last.z, performance.now());
+    var v = layer.tick(frame);
+
+    $("stateText").textContent = v.state;
+    var labels = [];
+    if (v.slightSlouch) labels.push("Наклон");
+    if (v.muscleRelaxed) labels.push("Тонус↓");
+    if (v.deepBreathing) labels.push("Дыхание");
+    $("actionText").textContent = labels.length ? "Симптомы: " + labels.join(" + ") : "→ Норма";
+
+    $("stagePanel").style.setProperty("--state-color", STATE_COLORS[v.state]);
+    $("stagePanel").style.setProperty("--state-glow-rgb", STATE_GLOW[v.state]);
+
+    var orb = $("reactorOrb"); orb.className = "reactor-orb";
+    if (v.state === "DEEP_DRIFT"){ orb.classList.add("pulse-fast"); speakAlarm(); }   // кричит, пока взведено
+    else if (v.state === "EARLY_DRIFT"){ orb.classList.add("pulse-slow"); }
+
+    setProgress("barSlowDrift", v.tiltDrift, 0.4); $("valSlowDrift").textContent = v.tiltDrift.toFixed(3);
+    setProgress("barTone", v.tone, 50.0); $("valTone").textContent = v.tone.toFixed(1);
+    setProgress("barBreath", v.breathAmp, 0.5); $("valBreath").textContent = v.breathAmp.toFixed(3);
+    setProgress("barSynergy", v.synergyCount, 3.0); $("valSynergy").textContent = v.synergyCount + "/3";
+
+    if (v.magOk){
+      var hh = ((v.magHeading % 360) + 360) % 360;
+      setProgress("barMag", hh, 360); $("valMag").textContent = Math.round(hh) + "°";
+      setProgress("barMagDrift", v.magDrift, 90);
+      $("valMagDrift").textContent = v.magInZone ? v.magDrift.toFixed(1) + "°" : "набл.";
+    } else {
+      setProgress("barMag", 0, 360); $("valMag").textContent = "нет";
+      setProgress("barMagDrift", 0, 90); $("valMagDrift").textContent = "браузер режет";
+    }
+
+    chartData.push(v.breathWave); if (chartData.length > 150) chartData.shift();
+    drawChart();
+  }
+  requestAnimationFrame(loop);
+}
+
+var canvas = $("liveChart"), ctx = canvas.getContext("2d");
+function drawChart(){
+  var w = canvas.clientWidth, h = canvas.clientHeight;
+  if (canvas.width !== w){ canvas.width = w; canvas.height = h; }
+  ctx.clearRect(0,0,w,h);
+  ctx.strokeStyle = "rgba(255,255,255,0.1)"; ctx.beginPath(); ctx.moveTo(0,h/2); ctx.lineTo(w,h/2); ctx.stroke();
+  if (chartData.length < 2) return;
+  ctx.strokeStyle = "#4aa3ff"; ctx.lineWidth = 2; ctx.beginPath();
+  var dx = w/150;
+  for (var i=0;i<chartData.length;i++){ var x=i*dx, y=(h/2)-(chartData[i]*(h/0.6)); if (i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y); }
+  ctx.stroke();
+}
+
+$("startBtn").addEventListener("click", function(){
+  var silent = new SpeechSynthesisUtterance(''); silent.volume = 0; synth.speak(silent); // разблокировать TTS
+  if (typeof DeviceMotionEvent !== "undefined" && typeof DeviceMotionEvent.requestPermission === "function"){
+    DeviceMotionEvent.requestPermission().then(function(res){ if (res === "granted") startDeviceMotion(); });
+  } else startDeviceMotion();
+  // запрос разрешения на ориентацию (для магнита/компаса) — где требуется
+  if (typeof DeviceOrientationEvent !== "undefined" && typeof DeviceOrientationEvent.requestPermission === "function"){
+    DeviceOrientationEvent.requestPermission().catch(function(){});
+  }
+});
+$("recalBtn").addEventListener("click", function(){ captureGravityRef(); if (layer) layer.reset(); _prevMagH = null; });
+</script>
+</body>
+</html>
