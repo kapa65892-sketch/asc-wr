@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>ASC-WR Live (v6 · лог + метка события)</title>
+<title>ASC-WR Live (v7 · стоп+скачать, без калибровки)</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
@@ -54,7 +54,8 @@
   /* --- event marking --- */
   .mode-line{font-family:var(--font-mono);font-size:11px;text-align:center;color:var(--text-muted);letter-spacing:1px;}
   .mode-pocket{color:var(--color-calm);} .mode-pass{color:var(--color-drift);}
-  .event-btn{width:100%;padding:30px 18px;border:none;border-radius:20px;font-family:var(--font-ui);font-size:22px;font-weight:700;letter-spacing:1px;transition:all .15s ease;}
+  .event-btn{width:100%;padding:30px 18px;border:none;border-radius:20px;font-family:var(--font-ui);font-size:22px;font-weight:700;letter-spacing:1px;transition:all .15s ease;
+    -webkit-user-select:none;user-select:none;-webkit-touch-callout:none;touch-action:manipulation;}
   .event-btn.locked{background:#161d28;color:#4a5563;box-shadow:none;cursor:not-allowed;}
   .event-btn.armed{background:linear-gradient(135deg,#ff5a6a,#c2273a);color:#fff;box-shadow:0 0 26px rgba(255,77,94,.5);cursor:pointer;}
   .event-btn.armed:active{transform:scale(0.98);}
@@ -65,7 +66,8 @@
   .r1{background:#7a6a1f;} .r2{background:#9a5a1a;} .r3{background:#8a2330;}
   .refine-btn:active{transform:scale(0.97);}
   .lock-ctl{width:100%;padding:14px;border:1px dashed var(--panel-border);border-radius:12px;background:rgba(0,0,0,0.2);
-    color:var(--text-muted);font-family:var(--font-mono);font-size:11px;text-align:center;cursor:pointer;user-select:none;}
+    color:var(--text-muted);font-family:var(--font-mono);font-size:11px;text-align:center;cursor:pointer;
+    -webkit-user-select:none;-moz-user-select:none;user-select:none;-webkit-touch-callout:none;touch-action:manipulation;}
   .logcount{font-family:var(--font-mono);font-size:10px;color:var(--text-muted);text-align:center;}
 
   @keyframes orb-pulse-fast{0%{transform:scale(0.98);}50%{transform:scale(1.03);box-shadow:inset 0 0 30px var(--state-color),0 0 45px rgba(var(--state-glow-rgb),0.7);}100%{transform:scale(0.98);}}
@@ -76,7 +78,7 @@
 <body>
   <header>
     <div class="logo">ASC-WR <span>Frontal Edge</span></div>
-    <div class="logo-sub">V6 · лог + метка события + Wake Lock (рабочая 5-я)</div>
+    <div class="logo-sub">V7 · авто-запись, стоп+скачать, замок-фикс (рабочая 5-я)</div>
   </header>
 
   <div class="disclaimer">
@@ -118,9 +120,9 @@
         <button class="refine-btn r2" data-type="дрёма">дрёма</button>
         <button class="refine-btn r3" data-type="засыпание">засыпание</button>
       </div>
-      <div class="lock-ctl" id="lockCtl">держать 2 сек, чтобы разблокировать метку (передаю телефон пассажиру)</div>
+      <button class="lock-ctl" id="lockCtl" type="button" oncontextmenu="return false;">держать 2 сек, чтобы разблокировать метку (передаю телефон пассажиру)</button>
       <div class="logcount" id="logCount">записей в логе: 0 · меток: 0</div>
-      <button class="btn btn-primary" id="downloadBtn" style="padding:14px;font-size:13px;">⤓ Скачать лог (CSV)</button>
+      <button class="btn btn-primary" id="stopSaveBtn" style="padding:16px;font-size:14px;">■ СТОП И СКАЧАТЬ ЛОГ</button>
     </div>
 
     <div class="panel chart-container">
@@ -135,7 +137,7 @@
       <div class="metric-card"><div class="metric-label">Магнит °</div><div class="progress-bar-container"><div class="progress-fill" id="barMag" style="background:var(--color-mag);box-shadow:0 0 8px var(--color-mag)"></div></div><div class="metric-value" id="valMag">—</div></div>
       <div class="metric-card"><div class="metric-label">Магн-дрейф</div><div class="progress-bar-container"><div class="progress-fill" id="barMagDrift" style="background:#6f7dff;box-shadow:0 0 8px #6f7dff"></div></div><div class="metric-value" id="valMagDrift">набл.</div></div>
     </div>
-    <button class="btn btn-secondary" id="recalBtn">Рекалибровка базовой нормы</button>
+    <div class="metric-card"><div class="metric-label" style="grid-column:1/4;text-align:center;color:#5c6675;">экран держится включённым (Wake Lock) · запись идёт сама с момента запуска</div></div>
   </div>
 
 <script>
@@ -321,13 +323,12 @@ function captureGravityRef(){var gMag=Math.sqrt(gravity.x*gravity.x+gravity.y*gr
 function onMotion(e){var a=e.accelerationIncludingGravity||e.acceleration;if(!a)return;
   last={x:a.x||0,y:a.y||0,z:a.z||0};
   if(e.rotationRate){lastRot={a:e.rotationRate.alpha||0,b:e.rotationRate.beta||0,g:e.rotationRate.gamma||0};hasGyro=true;}}
-function startDeviceMotion(){window.addEventListener("devicemotion",onMotion,true);setTimeout(beginCalibration,1000);}
-function beginCalibration(){
-  $("diagLog").innerHTML="Калибровка (2 секунды покоя)...";var t0=performance.now();
-  (function tick(){if(performance.now()-t0<2000)requestAnimationFrame(tick);
-    else{captureGravityRef();layer=new AscWrCore();sessionT0=Date.now();
-      logEvent("SESSION_START");logEvent("MODE:КАРМАН-бедро");
-      $("setupScreen").classList.add("hidden");$("runtimeScreen").classList.remove("hidden");loop();}})();
+function startDeviceMotion(){
+  window.addEventListener("devicemotion",onMotion,true);
+  layer=new AscWrCore();sessionT0=Date.now();gravityRef=null;
+  logEvent("SESSION_START");logEvent("MODE:КАРМАН-бедро");
+  $("setupScreen").classList.add("hidden");$("runtimeScreen").classList.remove("hidden");
+  loop();
 }
 
 // ---------- WAKE LOCK ----------
@@ -337,7 +338,7 @@ document.addEventListener('visibilitychange',function(){if(wakeLock!==null&&docu
 
 // ---------- ЛОГ ----------
 var logRows=[];           // {t, mode, tilt, tiltDrift, tone, breathAmp, breathWave, synergy, state, magOk, magHeading, magDrift, event}
-var markCount=0, sessionT0=0, mode="КАРМАН-бедро", markUnlocked=false, lastLogT=0, prevState="CALM";
+var markCount=0, sessionT0=0, mode="КАРМАН-бедро", markUnlocked=false, lastLogT=0, prevState="CALM", recording=true;
 function pushRow(v, eventTag){
   logRows.push({
     t: Date.now()-sessionT0,
@@ -378,6 +379,7 @@ function setProgress(id,val,max){$(id).style.width=clamp((val/max)*100,0,100)+"%
 function loop(){
   if(layer){
     var frame=toFrame(last.x,last.y,last.z,performance.now());
+    if(!gravityRef){var gm=Math.sqrt(gravity.x*gravity.x+gravity.y*gravity.y+gravity.z*gravity.z);if(gm>5)captureGravityRef();}
     var v=layer.tick(frame); window._lastV=v;
 
     $("stateText").textContent=v.state;
@@ -405,7 +407,7 @@ function loop(){
     }
     // лог каналов ~10 Гц
     var nowT=Date.now();
-    if(nowT-lastLogT>=100){ pushRow(v,""); lastLogT=nowT; updateLogCount(); }
+    if(recording && nowT-lastLogT>=100){ pushRow(v,""); lastLogT=nowT; updateLogCount(); }
 
     chartData.push(v.breathWave);if(chartData.length>150)chartData.shift();drawChart();
   }
@@ -429,7 +431,7 @@ function disarmMark(){ markUnlocked=false; $("eventBtn").className="event-btn lo
   $("refineRow").classList.add("hidden"); $("lockCtl").textContent="держать 2 сек, чтобы разблокировать метку (передаю телефон пассажиру)"; setMode("КАРМАН-бедро"); }
 
 var holdTimer=null;
-$("lockCtl").addEventListener("pointerdown",function(){
+$("lockCtl").addEventListener("pointerdown",function(e){ e.preventDefault();
   if(markUnlocked){ disarmMark(); return; } // заблокировать — мгновенно
   holdTimer=setTimeout(function(){ armMark(); navigator.vibrate&&navigator.vibrate(60); },2000); // разблокировать — удержание 2с
 });
@@ -446,7 +448,10 @@ $("eventBtn").addEventListener("click",function(){
 Array.prototype.forEach.call(document.querySelectorAll(".refine-btn"),function(btn){
   btn.addEventListener("click",function(){ if(!markUnlocked)return; logEvent("УТОЧН:"+this.getAttribute("data-type")); navigator.vibrate&&navigator.vibrate(30); });
 });
-$("downloadBtn").addEventListener("click",downloadLog);
+$("stopSaveBtn").addEventListener("click",function(){
+  if(recording){ recording=false; logEvent("REC_STOP"); downloadLog(); this.textContent="● ЗАПИСЬ СНОВА"; }
+  else { recording=true; lastLogT=0; logEvent("REC_RESUME"); this.textContent="■ СТОП И СКАЧАТЬ ЛОГ"; }
+});
 
 // ---------- START ----------
 $("startBtn").addEventListener("click",function(){
@@ -459,7 +464,6 @@ $("startBtn").addEventListener("click",function(){
     DeviceOrientationEvent.requestPermission().catch(function(){});
   }
 });
-$("recalBtn").addEventListener("click",function(){captureGravityRef();if(layer)layer.reset();_prevMagH=null;logEvent("RECAL");});
 </script>
 </body>
 </html>
