@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>ASC-WR Live (v7 · стоп+скачать, без калибровки)</title>
+<title>ASC-WR Live (v8 · магнит-дыхание + опора)</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
@@ -78,7 +78,7 @@
 <body>
   <header>
     <div class="logo">ASC-WR <span>Frontal Edge</span></div>
-    <div class="logo-sub">V7 · авто-запись, стоп+скачать, замок-фикс (рабочая 5-я)</div>
+    <div class="logo-sub">V8 · сырой магнит (дыхание) + кнопка опоры + лог поля</div>
   </header>
 
   <div class="disclaimer">
@@ -129,15 +129,22 @@
       <div class="chart-title"><span>Паттерн дыхания (Respiration Wave)</span></div>
       <canvas id="liveChart"></canvas>
     </div>
+
+    <div class="panel chart-container" style="border:1px solid #2a2a55;">
+      <div class="chart-title"><span style="color:#9b8cff">🧲 Магнит — дыхание (сырое поле)</span><span id="magStatus" style="color:#5c6675">…</span></div>
+      <canvas id="magChart"></canvas>
+    </div>
+
     <div class="panel metrics-grid">
       <div class="metric-card"><div class="metric-label">Tilt Drift</div><div class="progress-bar-container"><div class="progress-fill" id="barSlowDrift"></div></div><div class="metric-value" id="valSlowDrift">0.0</div></div>
       <div class="metric-card"><div class="metric-label">Gyro Tone</div><div class="progress-bar-container"><div class="progress-fill" id="barTone"></div></div><div class="metric-value" id="valTone">0.0</div></div>
       <div class="metric-card"><div class="metric-label">Breathing</div><div class="progress-bar-container"><div class="progress-fill" id="barBreath" style="background:var(--color-shift);box-shadow:0 0 8px var(--color-shift)"></div></div><div class="metric-value" id="valBreath">0.0</div></div>
       <div class="metric-card"><div class="metric-label">Synergy</div><div class="progress-bar-container"><div class="progress-fill" id="barSynergy" style="background:var(--color-wound);box-shadow:0 0 8px var(--color-wound)"></div></div><div class="metric-value" id="valSynergy">0/3</div></div>
       <div class="metric-card"><div class="metric-label">Магнит °</div><div class="progress-bar-container"><div class="progress-fill" id="barMag" style="background:var(--color-mag);box-shadow:0 0 8px var(--color-mag)"></div></div><div class="metric-value" id="valMag">—</div></div>
-      <div class="metric-card"><div class="metric-label">Магн-дрейф</div><div class="progress-bar-container"><div class="progress-fill" id="barMagDrift" style="background:#6f7dff;box-shadow:0 0 8px #6f7dff"></div></div><div class="metric-value" id="valMagDrift">набл.</div></div>
+      <div class="metric-card"><div class="metric-label">🧲 дыхание</div><div class="progress-bar-container"><div class="progress-fill" id="barMagBreath" style="background:#9b8cff;box-shadow:0 0 8px #9b8cff"></div></div><div class="metric-value" id="valMagBreath">—</div></div>
     </div>
-    <div class="metric-card"><div class="metric-label" style="grid-column:1/4;text-align:center;color:#5c6675;">экран держится включённым (Wake Lock) · запись идёт сама с момента запуска</div></div>
+    <button class="btn btn-secondary" id="recapBtn" style="padding:14px;font-size:13px;">📍 Опора: я в кармане (пересброс наклона)</button>
+    <div class="metric-card"><div class="metric-label" style="grid-column:1/4;text-align:center;color:#5c6675;">Wake Lock держит экран · запись с момента запуска · магнит на ремне слева ≈10см от телефона</div></div>
   </div>
 
 <script>
@@ -258,6 +265,21 @@ class BreathingDetector{
     if(absWave>this.amplitude)this.amplitude+=(absWave-this.amplitude)*0.1;else this.amplitude+=(absWave-this.amplitude)*this.ampTau;
     return{wave:wave,amplitude:this.amplitude,isRhythmic:this.amplitude>this.minAmplitude};}
 }
+// дыхание через СЫРОЕ магнитное поле (модуль, мкТл): магнит в ремне ходит с животом →
+// поле у телефона колеблется. fast-slow убирает Землю/статичный фон, оставляет осцилляцию.
+class MagBreathDetector{
+  constructor(){this.fastTau=0.12;this.slowTau=0.004;this.ampTau=0.02;this.minAmplitude=0.5;this.reset();}
+  reset(){this.fast=null;this.slow=null;this.amplitude=0;}
+  update(field){
+    if(field==null||!isFinite(field))return{ok:false,field:0,wave:0,amplitude:0,breathing:false};
+    if(this.fast===null){this.fast=field;this.slow=field;}
+    this.fast+=(field-this.fast)*this.fastTau;
+    this.slow+=(field-this.slow)*this.slowTau;
+    var wave=this.fast-this.slow,a=Math.abs(wave);
+    if(a>this.amplitude)this.amplitude+=(a-this.amplitude)*0.1;else this.amplitude+=(a-this.amplitude)*this.ampTau;
+    return{ok:true,field:this.slow,wave:wave,amplitude:this.amplitude,breathing:this.amplitude>this.minAmplitude};
+  }
+}
 
 var V_STATES=Object.freeze({CALM:"CALM",WORKING:"WORKING",EARLY_DRIFT:"EARLY_DRIFT",DEEP_DRIFT:"DEEP_DRIFT"});
 class AscWrCore{
@@ -266,10 +288,11 @@ class AscWrCore{
     this.toneDetector=new ToneFadeDetector();
     this.breathDetector=new BreathingDetector();
     this.magDetector=new SlowDriftDetector({deadband:3,settleRate:0.05,settleWindow:600,quietThreshold:5});
+    this.magBreath=new MagBreathDetector();
     this.earlyDrift=0.35;
     this.fireNeed=30;this.clearNeed=90;this._fireStreak=0;this._clearStreak=0;this.alarmLatched=false;
   }
-  reset(){this.tiltDetector.reset();this.toneDetector.reset();this.breathDetector.reset();this.magDetector.reset();
+  reset(){this.tiltDetector.reset();this.toneDetector.reset();this.breathDetector.reset();this.magDetector.reset();this.magBreath.reset();
     this._fireStreak=0;this._clearStreak=0;this.alarmLatched=false;}
   tick(frame){
     var tilt=scalar(frame.tilt),gyro=scalar(frame.gyroMag),force=scalar(frame.velocity);
@@ -277,6 +300,7 @@ class AscWrCore{
     var toneInfo=this.toneDetector.update(gyro);
     var breathInfo=this.breathDetector.update(force);
     var magInfo=frame.magOk?this.magDetector.update(scalar(frame.magCont)):{slowDriftAbs:0,inWorkingZone:false};
+    var magB=this.magBreath.update(frame.magFieldOk?frame.magField:null);
     var slightSlouch=tiltInfo.slowDriftAbs>this.earlyDrift*0.4;
     var muscleRelaxed=toneInfo.fading, deepBreathing=breathInfo.isRhythmic;
     var synergyCount=(slightSlouch?1:0)+(muscleRelaxed?1:0)+(deepBreathing?1:0);
@@ -291,22 +315,29 @@ class AscWrCore{
     else if(tiltInfo.slowDriftAbs>=this.earlyDrift||synergyCount>=1)state=V_STATES.EARLY_DRIFT;
     return{state:state,synergyCount:synergyCount,tiltDrift:tiltInfo.slowDriftAbs,tone:toneInfo.tone,
       breathWave:breathInfo.wave,breathAmp:breathInfo.amplitude,muscleRelaxed:muscleRelaxed,deepBreathing:deepBreathing,slightSlouch:slightSlouch,
-      magOk:frame.magOk,magHeading:frame.magHeading,magDrift:magInfo.slowDriftAbs,magInZone:magInfo.inWorkingZone};
+      magOk:frame.magOk,magHeading:frame.magHeading,magDrift:magInfo.slowDriftAbs,magInZone:magInfo.inWorkingZone,
+      magFieldOk:frame.magFieldOk,magField:magB.field,magWave:magB.wave,magBreathAmp:magB.amplitude,magBreathing:magB.breathing};
   }
 }
 
 // ---------- SENSORS ----------
 var layer=null,last={x:0,y:0,z:0},lastRot={a:0,b:0,g:0},hasGyro=false,chartData=[];
 var magHeading=null,magOk=false,magCont=0,_prevMagH=null;
+var magField=null,magFieldOk=false,_magSensor=null;
 function feedMag(h){if(h==null||!isFinite(h))return;magHeading=h;magOk=true;
   if(_prevMagH===null){_prevMagH=h;magCont=h;}else{var d=h-_prevMagH;while(d>180)d-=360;while(d<-180)d+=360;magCont+=d;_prevMagH=h;}}
 window.addEventListener("deviceorientationabsolute",function(e){if(e.alpha!=null)feedMag((360-e.alpha)%360);},true);
 window.addEventListener("deviceorientation",function(e){
   if(e.webkitCompassHeading!=null)feedMag(e.webkitCompassHeading);
   else if(e.absolute===true&&e.alpha!=null)feedMag((360-e.alpha)%360);},true);
-try{if('Magnetometer' in window){var mg=new Magnetometer({frequency:10});
-  mg.addEventListener('reading',function(){if(magHeading===null&&mg.x!=null&&mg.y!=null)feedMag(((Math.atan2(mg.y,mg.x)*180/Math.PI)+360)%360);});
+function startRawMagnetometer(){
+ try{if('Magnetometer' in window){var mg=new Magnetometer({frequency:25}); _magSensor=mg;
+  mg.addEventListener('reading',function(){
+    if(mg.x!=null){ magField=Math.sqrt(mg.x*mg.x+mg.y*mg.y+mg.z*mg.z); magFieldOk=true;
+      if(magHeading===null)feedMag(((Math.atan2(mg.y,mg.x)*180/Math.PI)+360)%360); }
+  });
   mg.addEventListener('error',function(){});mg.start();}}catch(e){}
+}
 
 var gravity={x:0,y:0,z:0},isGravityInitialized=false,gravityRef=null;
 function toFrame(ax,ay,az,t){
@@ -316,7 +347,7 @@ function toFrame(ax,ay,az,t){
   var gMag=Math.sqrt(gravity.x*gravity.x+gravity.y*gravity.y+gravity.z*gravity.z)||1e-9,tiltAngle=0;
   if(gravityRef){var dot=(gravity.x*gravityRef.x+gravity.y*gravityRef.y+gravity.z*gravityRef.z)/gMag;tiltAngle=Math.acos(clamp(dot,-1,1));}
   var gyroMag=hasGyro?Math.sqrt(lastRot.a*lastRot.a+lastRot.b*lastRot.b+lastRot.g*lastRot.g):0;
-  return{timestamp:t,velocity:mag,tilt:tiltAngle,gyroMag:gyroMag,magOk:magOk,magHeading:magHeading,magCont:magCont};
+  return{timestamp:t,velocity:mag,tilt:tiltAngle,gyroMag:gyroMag,magOk:magOk,magHeading:magHeading,magCont:magCont,magFieldOk:magFieldOk,magField:magField};
 }
 function captureGravityRef(){var gMag=Math.sqrt(gravity.x*gravity.x+gravity.y*gravity.y+gravity.z*gravity.z)||1e-9;
   gravityRef={x:gravity.x/gMag,y:gravity.y/gMag,z:gravity.z/gMag};}
@@ -353,6 +384,10 @@ function pushRow(v, eventTag){
     magOk: v?(v.magOk?1:0):"",
     magHeading: (v&&v.magOk&&v.magHeading!=null)?(+(((v.magHeading%360)+360)%360).toFixed(1)):"",
     magDrift: v?(+v.magDrift.toFixed(2)):"",
+    magFieldOk: v?(v.magFieldOk?1:0):"",
+    magField: (v&&v.magFieldOk)?(+v.magField.toFixed(2)):"",
+    magWave: (v&&v.magFieldOk)?(+v.magWave.toFixed(3)):"",
+    magBreathAmp: (v&&v.magFieldOk)?(+v.magBreathAmp.toFixed(3)):"",
     event: eventTag||""
   });
 }
@@ -361,10 +396,10 @@ function updateLogCount(){ $("logCount").textContent="записей в логе
 
 function downloadLog(){
   if(logRows.length===0){alert("Лог пуст");return;}
-  var cols=["t_ms","mode","tilt","tiltDrift","tone","breathAmp","breathWave","synergy","state","magOk","magHeading","magDrift","event"];
+  var cols=["t_ms","mode","tilt","tiltDrift","tone","breathAmp","breathWave","synergy","state","magOk","magHeading","magDrift","magFieldOk","magField","magWave","magBreathAmp","event"];
   var lines=[cols.join(",")];
   for(var i=0;i<logRows.length;i++){var r=logRows[i];
-    lines.push([r.t,'"'+r.mode+'"',r.tilt,r.tiltDrift,r.tone,r.breathAmp,r.breathWave,r.synergy,r.state,r.magOk,r.magHeading,r.magDrift,'"'+r.event+'"'].join(","));}
+    lines.push([r.t,'"'+r.mode+'"',r.tilt,r.tiltDrift,r.tone,r.breathAmp,r.breathWave,r.synergy,r.state,r.magOk,r.magHeading,r.magDrift,r.magFieldOk,r.magField,r.magWave,r.magBreathAmp,'"'+r.event+'"'].join(","));}
   var blob=new Blob([lines.join("\n")],{type:'text/csv'});
   var url=URL.createObjectURL(blob);var a=document.createElement('a');
   a.href=url;a.download="asc_wr_log_"+new Date().toISOString().replace(/[:.]/g,"-")+".csv";
@@ -395,9 +430,19 @@ function loop(){
     setProgress("barTone",v.tone,50.0);$("valTone").textContent=v.tone.toFixed(1);
     setProgress("barBreath",v.breathAmp,0.5);$("valBreath").textContent=v.breathAmp.toFixed(3);
     setProgress("barSynergy",v.synergyCount,3.0);$("valSynergy").textContent=v.synergyCount+"/3";
-    if(v.magOk){var hh=(((v.magHeading%360)+360)%360);setProgress("barMag",hh,360);$("valMag").textContent=Math.round(hh)+"°";
-      setProgress("barMagDrift",v.magDrift,90);$("valMagDrift").textContent=v.magInZone?v.magDrift.toFixed(1)+"°":"набл.";}
-    else{setProgress("barMag",0,360);$("valMag").textContent="нет";setProgress("barMagDrift",0,90);$("valMagDrift").textContent="режет";}
+    if(v.magOk){var hh=(((v.magHeading%360)+360)%360);setProgress("barMag",hh,360);$("valMag").textContent=Math.round(hh)+"°";}
+    else{setProgress("barMag",0,360);$("valMag").textContent="нет";}
+    if(v.magFieldOk){
+      setProgress("barMagBreath",v.magBreathAmp,3.0);
+      $("valMagBreath").textContent=v.magBreathAmp.toFixed(2);
+      $("magStatus").textContent="поле "+v.magField.toFixed(1)+" мкТл"+(v.magBreathing?" · ДЫХАНИЕ":"");
+      $("magStatus").style.color=v.magBreathing?"#9b8cff":"#5c6675";
+      magData.push(v.magWave);if(magData.length>150)magData.shift();
+    } else {
+      setProgress("barMagBreath",0,3.0);$("valMagBreath").textContent="нет";
+      $("magStatus").textContent="магнитометр режет браузер";
+    }
+    drawMagChart();
 
     // переход коры -> событие в лог (для зазора "прибор минус человек")
     if(v.state!==prevState){
@@ -418,6 +463,15 @@ function drawChart(){var w=canvas.clientWidth,h=canvas.clientHeight;if(canvas.wi
   ctx.clearRect(0,0,w,h);ctx.strokeStyle="rgba(255,255,255,0.1)";ctx.beginPath();ctx.moveTo(0,h/2);ctx.lineTo(w,h/2);ctx.stroke();
   if(chartData.length<2)return;ctx.strokeStyle="#4aa3ff";ctx.lineWidth=2;ctx.beginPath();var dx=w/150;
   for(var i=0;i<chartData.length;i++){var x=i*dx,y=(h/2)-(chartData[i]*(h/0.6));if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y);}ctx.stroke();}
+
+var magData=[], magCanvas=$("magChart"), mctx=magCanvas.getContext("2d");
+function drawMagChart(){var w=magCanvas.clientWidth,h=magCanvas.clientHeight;if(magCanvas.width!==w){magCanvas.width=w;magCanvas.height=h;}
+  mctx.clearRect(0,0,w,h);mctx.strokeStyle="rgba(255,255,255,0.1)";mctx.beginPath();mctx.moveTo(0,h/2);mctx.lineTo(w,h/2);mctx.stroke();
+  if(magData.length<2)return;
+  // авто-масштаб по максимальной амплитуде окна (чтобы слабую волну было видно)
+  var amax=0.5;for(var k=0;k<magData.length;k++){var a=Math.abs(magData[k]);if(a>amax)amax=a;}
+  mctx.strokeStyle="#9b8cff";mctx.lineWidth=2;mctx.beginPath();var dx=w/150;
+  for(var i=0;i<magData.length;i++){var x=i*dx,y=(h/2)-(magData[i]/amax*(h*0.45));if(i===0)mctx.moveTo(x,y);else mctx.lineTo(x,y);}mctx.stroke();}
 
 // ---------- МЕТКА: замок + режим ----------
 function setMode(m){ mode=m; var ml=$("modeLine");
@@ -453,10 +507,19 @@ $("stopSaveBtn").addEventListener("click",function(){
   else { recording=true; lastLogT=0; logEvent("REC_RESUME"); this.textContent="■ СТОП И СКАЧАТЬ ЛОГ"; }
 });
 
+// кнопка "опора": пересброс наклона, когда телефон уже в кармане
+$("recapBtn").addEventListener("click",function(){
+  captureGravityRef(); if(layer)layer.reset(); _prevMagH=null;
+  logEvent("RECAL_POCKET"); navigator.vibrate&&navigator.vibrate(50);
+  this.textContent="✓ опора пересброшена";
+  var b=this; setTimeout(function(){b.textContent="📍 Опора: я в кармане (пересброс наклона)";},1500);
+});
+
 // ---------- START ----------
 $("startBtn").addEventListener("click",function(){
   var s=new SpeechSynthesisUtterance('');s.volume=0;synth.speak(s); // разблокировать TTS
   requestWakeLock();
+  startRawMagnetometer(); // сырое магнитное поле (дыхание через магнит)
   if(typeof DeviceMotionEvent!=="undefined"&&typeof DeviceMotionEvent.requestPermission==="function"){
     DeviceMotionEvent.requestPermission().then(function(r){if(r==="granted")startDeviceMotion();});
   }else startDeviceMotion();
