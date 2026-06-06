@@ -188,9 +188,13 @@ function populateVoiceList(){
 }
 populateVoiceList();
 if(speechSynthesis.onvoiceschanged!==undefined)speechSynthesis.onvoiceschanged=populateVoiceList;
-function speakAlarm(){
+var lastAlarmSpeakT=0;
+function speakAlarm(text,force){
+  var now=Date.now();
+  if(!force&&now-lastAlarmSpeakT<15000)return;
   if(synth.speaking)return;
-  var u=new SpeechSynthesisUtterance($("alarmPhrase").value||"Проснись!");
+  lastAlarmSpeakT=now;
+  var u=new SpeechSynthesisUtterance(text||$("alarmPhrase").value||"Проснись!");
   var opt=$("voiceSelect").selectedOptions[0];
   if(opt){var nm=opt.getAttribute('data-name');u.lang=$("langSelect").value;
     for(var i=0;i<systemVoices.length;i++){if(systemVoices[i].name===nm){u.voice=systemVoices[i];break;}}}
@@ -265,7 +269,7 @@ function updateMicBreath(){
   micWave=b.wave;micBreathAmp=b.amplitude;
   return{ready:true,level:micLevel,wave:micWave,amp:micBreathAmp};
 }
-$("testVoiceBtn").addEventListener("click",speakAlarm);
+$("testVoiceBtn").addEventListener("click",function(){speakAlarm(null,true);});
 if($("audioRecordEnable"))$("audioRecordEnable").addEventListener("change",function(){
   if(this.checked&&$("micEnable"))$("micEnable").checked=true;
 });
@@ -350,11 +354,13 @@ class AscWrCore{
     this.toneDetector=new ToneFadeDetector();
     this.breathDetector=new BreathingDetector();
     this.earlyDrift=0.35;
-    this.quietNeed=180;this.earlyNeed=300;this.fireNeed=900;this.clearNeed=180;
+    this.quietNeed=180;this.earlyNeed=60;this.fireNeed=240;this.clearNeed=180;
     this._earlyStreak=0;this._fireStreak=0;this._clearStreak=0;this.alarmLatched=false;this.motionHold=0;this.quietStreak=0;
+    this.wakeTonePeak=0;this.wakeBreathPeak=0;this.collapseStreak=0;
   }
   reset(){this.tiltDetector.reset();this.toneDetector.reset();this.breathDetector.reset();
-    this._earlyStreak=0;this._fireStreak=0;this._clearStreak=0;this.alarmLatched=false;this.motionHold=0;this.quietStreak=0;}
+    this._earlyStreak=0;this._fireStreak=0;this._clearStreak=0;this.alarmLatched=false;this.motionHold=0;this.quietStreak=0;
+    this.wakeTonePeak=0;this.wakeBreathPeak=0;this.collapseStreak=0;}
   tick(frame){
     var tilt=scalar(frame.tilt),gyro=scalar(frame.gyroMag),force=scalar(frame.velocity);
     var tiltInfo=this.tiltDetector.update(tilt);
@@ -366,6 +372,14 @@ class AscWrCore{
     var quietNow=!motionArtifact&&tiltInfo.inWorkingZone&&force<0.35&&gyro<8;
     if(quietNow)this.quietStreak=Math.min(this.quietStreak+1,6000);else this.quietStreak=0;
     var quietReady=this.quietStreak>=this.quietNeed;
+    if(!motionArtifact&&!quietReady){
+      this.wakeTonePeak=Math.max(this.wakeTonePeak*0.9995,toneInfo.tone);
+      this.wakeBreathPeak=Math.max(this.wakeBreathPeak*0.9995,breathInfo.amplitude);
+    }
+    var toneCollapsed=quietReady&&this.wakeTonePeak>1.2&&toneInfo.tone<this.wakeTonePeak*0.35;
+    var breathCollapsed=quietReady&&this.wakeBreathPeak>0.08&&breathInfo.amplitude<this.wakeBreathPeak*0.25;
+    var quietCollapse=toneCollapsed&&breathCollapsed;
+    this.collapseStreak=quietCollapse?this.collapseStreak+1:0;
     var slowDrowseDrift=quietReady&&tiltInfo.slowDriftAbs>this.earlyDrift*0.4;
     var muscleRelaxed=quietReady&&toneInfo.fading;
     var breathQuiet=quietReady&&breathInfo.amplitude<0.035&&this.quietStreak>this.quietNeed*2;
@@ -378,7 +392,8 @@ class AscWrCore{
       return{state:V_STATES.ACTIVE,synergyCount:0,tiltDrift:tiltInfo.slowDriftAbs,tone:toneInfo.tone,
         toneRatio:toneInfo.ratio,breathWave:breathInfo.wave,breathAmp:breathInfo.amplitude,
         muscleRelaxed:false,deepBreathing:false,slightSlouch:false,tiltActivity:tiltInfo.activity,
-        motionArtifact:true,motionLevel:force,gyroLevel:gyro,quietReady:false,quietStreak:0,driftStreak:0};
+        motionArtifact:true,motionLevel:force,gyroLevel:gyro,quietReady:false,quietStreak:0,driftStreak:0,
+        quietCollapse:false,collapseStreak:0,wakeTonePeak:this.wakeTonePeak,wakeBreathPeak:this.wakeBreathPeak};
     }
     if(!quietReady){
       this._earlyStreak=0;this._fireStreak=0;this._clearStreak=Math.min(this.clearNeed,this._clearStreak+1);
@@ -386,10 +401,11 @@ class AscWrCore{
       return{state:tiltInfo.inWorkingZone?V_STATES.WORKING:V_STATES.CALM,synergyCount:0,tiltDrift:tiltInfo.slowDriftAbs,tone:toneInfo.tone,
         toneRatio:toneInfo.ratio,breathWave:breathInfo.wave,breathAmp:breathInfo.amplitude,
         muscleRelaxed:false,deepBreathing:false,slightSlouch:false,tiltActivity:tiltInfo.activity,
-        motionArtifact:false,motionLevel:force,gyroLevel:gyro,quietReady:false,quietStreak:this.quietStreak,driftStreak:0};
+        motionArtifact:false,motionLevel:force,gyroLevel:gyro,quietReady:false,quietStreak:this.quietStreak,driftStreak:0,
+        quietCollapse:false,collapseStreak:0,wakeTonePeak:this.wakeTonePeak,wakeBreathPeak:this.wakeBreathPeak};
     }
-    var rawEarly=slowDrowseDrift;
-    var rawDeep=slowDrowseDrift&&(muscleRelaxed||breathQuiet||deepBreathing);
+    var rawEarly=quietCollapse||(slowDrowseDrift&&(muscleRelaxed||breathQuiet||deepBreathing));
+    var rawDeep=rawEarly&&(breathQuiet||toneCollapsed||breathCollapsed||muscleRelaxed);
     this._earlyStreak=rawEarly?this._earlyStreak+1:0;
     this._fireStreak=rawDeep?this._fireStreak+1:0;
     this._clearStreak=(!rawEarly&&synergyCount===0)?this._clearStreak+1:0;
@@ -401,7 +417,8 @@ class AscWrCore{
     return{state:state,synergyCount:synergyCount,tiltDrift:tiltInfo.slowDriftAbs,tone:toneInfo.tone,
       toneRatio:toneInfo.ratio,breathWave:breathInfo.wave,breathAmp:breathInfo.amplitude,
       muscleRelaxed:muscleRelaxed,deepBreathing:deepBreathing,slightSlouch:slightSlouch,tiltActivity:tiltInfo.activity,
-      motionArtifact:false,motionLevel:force,gyroLevel:gyro,quietReady:true,quietStreak:this.quietStreak,driftStreak:this._fireStreak};
+      motionArtifact:false,motionLevel:force,gyroLevel:gyro,quietReady:true,quietStreak:this.quietStreak,driftStreak:this._fireStreak,
+      quietCollapse:quietCollapse,collapseStreak:this.collapseStreak,wakeTonePeak:this.wakeTonePeak,wakeBreathPeak:this.wakeBreathPeak};
   }
 }
 
@@ -456,6 +473,10 @@ function pushRow(v, eventTag){
     quietReady: v?(v.quietReady?1:0):"",
     quietStreak: v?v.quietStreak:"",
     driftStreak: v?v.driftStreak:"",
+    quietCollapse: v?(v.quietCollapse?1:0):"",
+    collapseStreak: v?v.collapseStreak:"",
+    wakeTonePeak: v?(+v.wakeTonePeak.toFixed(3)):"",
+    wakeBreathPeak: v?(+v.wakeBreathPeak.toFixed(4)):"",
     micOn: micReady?1:0,
     audioRec: audioRecordEnabled?1:0,
     micLevel: micReady?(+micLevel.toFixed(5)):"",
@@ -469,7 +490,7 @@ function pushRow(v, eventTag){
     breathWave: v?(+v.breathWave.toFixed(4)):"",
     synergy: v?v.synergyCount:"",
     state: v?v.state:"",
-    symptoms: v?[(v.motionArtifact?"active":""),(v.slightSlouch?"tilt":""),(v.muscleRelaxed?"tone":""),(v.deepBreathing?"breath":"")].filter(Boolean).join("+"):"",
+    symptoms: v?[(v.motionArtifact?"active":""),(v.quietCollapse?"collapse":""),(v.slightSlouch?"tilt":""),(v.muscleRelaxed?"tone":""),(v.deepBreathing?"breath":"")].filter(Boolean).join("+"):"",
     event: eventTag||""
   });
 }
@@ -478,10 +499,10 @@ function updateLogCount(){ $("logCount").textContent="записей в логе
 
 function downloadLog(){
   if(logRows.length===0){alert("Лог пуст");return;}
-  var cols=["t_ms","mode","placement","note","autoCap","quietAvg","motionArtifact","motionLevel","gyroLevel","quietReady","quietStreak","driftStreak","micOn","audioRec","micLevel","micBreathAmp","micWave","tilt","tiltDrift","tone","toneRatio","breathAmp","breathWave","synergy","state","symptoms","event"];
+  var cols=["t_ms","mode","placement","note","autoCap","quietAvg","motionArtifact","motionLevel","gyroLevel","quietReady","quietStreak","driftStreak","quietCollapse","collapseStreak","wakeTonePeak","wakeBreathPeak","micOn","audioRec","micLevel","micBreathAmp","micWave","tilt","tiltDrift","tone","toneRatio","breathAmp","breathWave","synergy","state","symptoms","event"];
   var lines=[cols.join(",")];
   for(var i=0;i<logRows.length;i++){var r=logRows[i];
-    lines.push([r.t,'"'+r.mode+'"','"'+r.placement+'"','"'+String(r.note).replace(/"/g,"'")+'"',r.autoCap,r.quietAvg,r.motionArtifact,r.motionLevel,r.gyroLevel,r.quietReady,r.quietStreak,r.driftStreak,r.micOn,r.audioRec,r.micLevel,r.micBreathAmp,r.micWave,r.tilt,r.tiltDrift,r.tone,r.toneRatio,r.breathAmp,r.breathWave,r.synergy,r.state,'"'+r.symptoms+'"','"'+r.event+'"'].join(","));}
+    lines.push([r.t,'"'+r.mode+'"','"'+r.placement+'"','"'+String(r.note).replace(/"/g,"'")+'"',r.autoCap,r.quietAvg,r.motionArtifact,r.motionLevel,r.gyroLevel,r.quietReady,r.quietStreak,r.driftStreak,r.quietCollapse,r.collapseStreak,r.wakeTonePeak,r.wakeBreathPeak,r.micOn,r.audioRec,r.micLevel,r.micBreathAmp,r.micWave,r.tilt,r.tiltDrift,r.tone,r.toneRatio,r.breathAmp,r.breathWave,r.synergy,r.state,'"'+r.symptoms+'"','"'+r.event+'"'].join(","));}
   var blob=new Blob([lines.join("\n")],{type:'text/csv'});
   var url=URL.createObjectURL(blob);var a=document.createElement('a');
   a.href=url;a.download="asc_wr_log_"+new Date().toISOString().replace(/[:.]/g,"-")+".csv";
@@ -528,7 +549,7 @@ function loop(){
       $("stagePanel").style.setProperty("--state-glow-rgb","133, 149, 174");
     } else {
       $("stateText").textContent=v.state;
-      var labels=[];if(v.slightSlouch)labels.push("Наклон");if(v.muscleRelaxed)labels.push("Тонус↓");if(v.deepBreathing)labels.push("Дыхание");
+      var labels=[];if(v.quietCollapse)labels.push("Схлоп фона");if(v.slightSlouch)labels.push("Наклон");if(v.muscleRelaxed)labels.push("Тонус↓");if(v.deepBreathing)labels.push("Дыхание");
       $("actionText").textContent=v.motionArtifact?"Движение/кручение — тревога блокирована":
         (!v.quietReady?"Стабилизация — жду тихое окно":
         (v.state==="WORKING"?"Рабочее окно — ищу медленный дрейф":
@@ -536,7 +557,7 @@ function loop(){
       $("stagePanel").style.setProperty("--state-color",STATE_COLORS[v.state]);
       $("stagePanel").style.setProperty("--state-glow-rgb",STATE_GLOW[v.state]);
       if(v.state==="DEEP_DRIFT"){orb.classList.add("pulse-fast");speakAlarm();}
-      else if(v.state==="EARLY_DRIFT"){orb.classList.add("pulse-slow");}
+      else if(v.state==="EARLY_DRIFT"){orb.classList.add("pulse-slow");speakAlarm("Игорь, проверь бодрость. Держи внимание. При возможности остановись безопасно.");}
     }
 
     setProgress("barSlowDrift",v.tiltDrift,0.4);$("valSlowDrift").textContent=v.tiltDrift.toFixed(3);
