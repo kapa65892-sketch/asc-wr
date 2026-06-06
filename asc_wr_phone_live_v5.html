@@ -109,12 +109,15 @@
       <input type="text" id="sessionNote" class="input-field" placeholder="заметка: тест, поза, поездка">
       <label style="display:flex;align-items:center;gap:10px;font-size:12px;color:#8fa2b7;">
         <input type="checkbox" id="micEnable" checked>
-        микрофон-дыхание: числовые признаки
+        включить микрофон: дыхательные/голосовые признаки
       </label>
       <label style="display:flex;align-items:center;gap:10px;font-size:12px;color:#f5a623;">
         <input type="checkbox" id="audioRecordEnable">
-        записывать аудио отдельным файлом для меток
+        лаборатория: сохранить аудио отдельным файлом
       </label>
+      <div style="font-size:10px;color:#6f7f93;line-height:1.35;">
+        Если включен микрофон, браузер спросит разрешение. Без разрешения микрофонные признаки и аудио не работают.
+      </div>
     </div>
     <div class="panel" style="display:flex;flex-direction:column;gap:15px;">
       <div class="core-display" style="padding:5px;"><div class="reactor-orb" style="--state-color:var(--accent);--state-glow-rgb:45,212,167;width:60px;height:60px;"></div></div>
@@ -263,6 +266,12 @@ function updateMicBreath(){
   return{ready:true,level:micLevel,wave:micWave,amp:micBreathAmp};
 }
 $("testVoiceBtn").addEventListener("click",speakAlarm);
+if($("audioRecordEnable"))$("audioRecordEnable").addEventListener("change",function(){
+  if(this.checked&&$("micEnable"))$("micEnable").checked=true;
+});
+if($("micEnable"))$("micEnable").addEventListener("change",function(){
+  if(!this.checked&&$("audioRecordEnable"))$("audioRecordEnable").checked=false;
+});
 
 // ---------- SLOW DRIFT (каменный якорь) ----------
 class SlowDriftDetector{
