@@ -343,37 +343,65 @@ class BreathingDetector{
     if(absWave>this.amplitude)this.amplitude+=(absWave-this.amplitude)*0.1;else this.amplitude+=(absWave-this.amplitude)*this.ampTau;
     return{wave:wave,amplitude:this.amplitude,isRhythmic:this.amplitude>this.minAmplitude};}
 }
-var V_STATES=Object.freeze({CALM:"CALM",WORKING:"WORKING",EARLY_DRIFT:"EARLY_DRIFT",DEEP_DRIFT:"DEEP_DRIFT"});
+var V_STATES=Object.freeze({CALM:"CALM",WORKING:"WORKING",ACTIVE:"ACTIVE",EARLY_DRIFT:"EARLY_DRIFT",DEEP_DRIFT:"DEEP_DRIFT"});
 class AscWrCore{
   constructor(){
     this.tiltDetector=new SlowDriftDetector();
     this.toneDetector=new ToneFadeDetector();
     this.breathDetector=new BreathingDetector();
     this.earlyDrift=0.35;
-    this.fireNeed=30;this.clearNeed=90;this._fireStreak=0;this._clearStreak=0;this.alarmLatched=false;
+    this.quietNeed=180;this.earlyNeed=300;this.fireNeed=900;this.clearNeed=180;
+    this._earlyStreak=0;this._fireStreak=0;this._clearStreak=0;this.alarmLatched=false;this.motionHold=0;this.quietStreak=0;
   }
   reset(){this.tiltDetector.reset();this.toneDetector.reset();this.breathDetector.reset();
-    this._fireStreak=0;this._clearStreak=0;this.alarmLatched=false;}
+    this._earlyStreak=0;this._fireStreak=0;this._clearStreak=0;this.alarmLatched=false;this.motionHold=0;this.quietStreak=0;}
   tick(frame){
     var tilt=scalar(frame.tilt),gyro=scalar(frame.gyroMag),force=scalar(frame.velocity);
     var tiltInfo=this.tiltDetector.update(tilt);
     var toneInfo=this.toneDetector.update(gyro);
     var breathInfo=this.breathDetector.update(force);
-    var slightSlouch=tiltInfo.slowDriftAbs>this.earlyDrift*0.4;
-    var muscleRelaxed=toneInfo.fading, deepBreathing=breathInfo.isRhythmic;
+    var handlingArtifact=force>1.0||gyro>45;
+    if(handlingArtifact)this.motionHold=90;else if(this.motionHold>0)this.motionHold--;
+    var motionArtifact=this.motionHold>0;
+    var quietNow=!motionArtifact&&tiltInfo.inWorkingZone&&force<0.35&&gyro<8;
+    if(quietNow)this.quietStreak=Math.min(this.quietStreak+1,6000);else this.quietStreak=0;
+    var quietReady=this.quietStreak>=this.quietNeed;
+    var slowDrowseDrift=quietReady&&tiltInfo.slowDriftAbs>this.earlyDrift*0.4;
+    var muscleRelaxed=quietReady&&toneInfo.fading;
+    var breathQuiet=quietReady&&breathInfo.amplitude<0.035&&this.quietStreak>this.quietNeed*2;
+    var deepBreathing=quietReady&&breathInfo.isRhythmic&&!breathQuiet;
+    var slightSlouch=slowDrowseDrift;
     var synergyCount=(slightSlouch?1:0)+(muscleRelaxed?1:0)+(deepBreathing?1:0);
-    var rawDeep=(synergyCount>=2&&tiltInfo.inWorkingZone);
+    if(motionArtifact){
+      this._earlyStreak=0;this._fireStreak=0;this.quietStreak=0;this._clearStreak=Math.min(this.clearNeed,this._clearStreak+3);
+      if(this._clearStreak>=12)this.alarmLatched=false;
+      return{state:V_STATES.ACTIVE,synergyCount:0,tiltDrift:tiltInfo.slowDriftAbs,tone:toneInfo.tone,
+        toneRatio:toneInfo.ratio,breathWave:breathInfo.wave,breathAmp:breathInfo.amplitude,
+        muscleRelaxed:false,deepBreathing:false,slightSlouch:false,tiltActivity:tiltInfo.activity,
+        motionArtifact:true,motionLevel:force,gyroLevel:gyro,quietReady:false,quietStreak:0,driftStreak:0};
+    }
+    if(!quietReady){
+      this._earlyStreak=0;this._fireStreak=0;this._clearStreak=Math.min(this.clearNeed,this._clearStreak+1);
+      if(this._clearStreak>=this.clearNeed)this.alarmLatched=false;
+      return{state:tiltInfo.inWorkingZone?V_STATES.WORKING:V_STATES.CALM,synergyCount:0,tiltDrift:tiltInfo.slowDriftAbs,tone:toneInfo.tone,
+        toneRatio:toneInfo.ratio,breathWave:breathInfo.wave,breathAmp:breathInfo.amplitude,
+        muscleRelaxed:false,deepBreathing:false,slightSlouch:false,tiltActivity:tiltInfo.activity,
+        motionArtifact:false,motionLevel:force,gyroLevel:gyro,quietReady:false,quietStreak:this.quietStreak,driftStreak:0};
+    }
+    var rawEarly=slowDrowseDrift;
+    var rawDeep=slowDrowseDrift&&(muscleRelaxed||breathQuiet||deepBreathing);
+    this._earlyStreak=rawEarly?this._earlyStreak+1:0;
     this._fireStreak=rawDeep?this._fireStreak+1:0;
-    this._clearStreak=(synergyCount===0)?this._clearStreak+1:0;
+    this._clearStreak=(!rawEarly&&synergyCount===0)?this._clearStreak+1:0;
     if(!this.alarmLatched&&this._fireStreak>=this.fireNeed)this.alarmLatched=true;
     if(this.alarmLatched&&this._clearStreak>=this.clearNeed)this.alarmLatched=false;
-    var state=V_STATES.CALM;
-    if(tiltInfo.inWorkingZone)state=V_STATES.WORKING;
+    var state=V_STATES.WORKING;
     if(this.alarmLatched)state=V_STATES.DEEP_DRIFT;
-    else if(tiltInfo.slowDriftAbs>=this.earlyDrift||synergyCount>=1)state=V_STATES.EARLY_DRIFT;
+    else if(this._earlyStreak>=this.earlyNeed)state=V_STATES.EARLY_DRIFT;
     return{state:state,synergyCount:synergyCount,tiltDrift:tiltInfo.slowDriftAbs,tone:toneInfo.tone,
       toneRatio:toneInfo.ratio,breathWave:breathInfo.wave,breathAmp:breathInfo.amplitude,
-      muscleRelaxed:muscleRelaxed,deepBreathing:deepBreathing,slightSlouch:slightSlouch,tiltActivity:tiltInfo.activity};
+      muscleRelaxed:muscleRelaxed,deepBreathing:deepBreathing,slightSlouch:slightSlouch,tiltActivity:tiltInfo.activity,
+      motionArtifact:false,motionLevel:force,gyroLevel:gyro,quietReady:true,quietStreak:this.quietStreak,driftStreak:this._fireStreak};
   }
 }
 
@@ -422,6 +450,12 @@ function pushRow(v, eventTag){
     note: sessionNote,
     autoCap: autoCapDone?1:0,
     quietAvg: (lastQuietAvg!==""?+lastQuietAvg.toFixed(4):""),
+    motionArtifact: v?(v.motionArtifact?1:0):"",
+    motionLevel: v?(+v.motionLevel.toFixed(4)):"",
+    gyroLevel: v?(+v.gyroLevel.toFixed(2)):"",
+    quietReady: v?(v.quietReady?1:0):"",
+    quietStreak: v?v.quietStreak:"",
+    driftStreak: v?v.driftStreak:"",
     micOn: micReady?1:0,
     audioRec: audioRecordEnabled?1:0,
     micLevel: micReady?(+micLevel.toFixed(5)):"",
@@ -435,7 +469,7 @@ function pushRow(v, eventTag){
     breathWave: v?(+v.breathWave.toFixed(4)):"",
     synergy: v?v.synergyCount:"",
     state: v?v.state:"",
-    symptoms: v?[(v.slightSlouch?"tilt":""),(v.muscleRelaxed?"tone":""),(v.deepBreathing?"breath":"")].filter(Boolean).join("+"):"",
+    symptoms: v?[(v.motionArtifact?"active":""),(v.slightSlouch?"tilt":""),(v.muscleRelaxed?"tone":""),(v.deepBreathing?"breath":"")].filter(Boolean).join("+"):"",
     event: eventTag||""
   });
 }
@@ -444,10 +478,10 @@ function updateLogCount(){ $("logCount").textContent="записей в логе
 
 function downloadLog(){
   if(logRows.length===0){alert("Лог пуст");return;}
-  var cols=["t_ms","mode","placement","note","autoCap","quietAvg","micOn","audioRec","micLevel","micBreathAmp","micWave","tilt","tiltDrift","tone","toneRatio","breathAmp","breathWave","synergy","state","symptoms","event"];
+  var cols=["t_ms","mode","placement","note","autoCap","quietAvg","motionArtifact","motionLevel","gyroLevel","quietReady","quietStreak","driftStreak","micOn","audioRec","micLevel","micBreathAmp","micWave","tilt","tiltDrift","tone","toneRatio","breathAmp","breathWave","synergy","state","symptoms","event"];
   var lines=[cols.join(",")];
   for(var i=0;i<logRows.length;i++){var r=logRows[i];
-    lines.push([r.t,'"'+r.mode+'"','"'+r.placement+'"','"'+String(r.note).replace(/"/g,"'")+'"',r.autoCap,r.quietAvg,r.micOn,r.audioRec,r.micLevel,r.micBreathAmp,r.micWave,r.tilt,r.tiltDrift,r.tone,r.toneRatio,r.breathAmp,r.breathWave,r.synergy,r.state,'"'+r.symptoms+'"','"'+r.event+'"'].join(","));}
+    lines.push([r.t,'"'+r.mode+'"','"'+r.placement+'"','"'+String(r.note).replace(/"/g,"'")+'"',r.autoCap,r.quietAvg,r.motionArtifact,r.motionLevel,r.gyroLevel,r.quietReady,r.quietStreak,r.driftStreak,r.micOn,r.audioRec,r.micLevel,r.micBreathAmp,r.micWave,r.tilt,r.tiltDrift,r.tone,r.toneRatio,r.breathAmp,r.breathWave,r.synergy,r.state,'"'+r.symptoms+'"','"'+r.event+'"'].join(","));}
   var blob=new Blob([lines.join("\n")],{type:'text/csv'});
   var url=URL.createObjectURL(blob);var a=document.createElement('a');
   a.href=url;a.download="asc_wr_log_"+new Date().toISOString().replace(/[:.]/g,"-")+".csv";
@@ -455,8 +489,8 @@ function downloadLog(){
 }
 
 // ---------- UI LOOP ----------
-var STATE_COLORS={CALM:"var(--color-calm)",WORKING:"var(--accent)",EARLY_DRIFT:"var(--color-drift)",DEEP_DRIFT:"var(--color-fault)"};
-var STATE_GLOW={CALM:"133, 149, 174",WORKING:"45, 212, 167",EARLY_DRIFT:"245, 166, 35",DEEP_DRIFT:"255, 77, 94"};
+var STATE_COLORS={CALM:"var(--color-calm)",WORKING:"var(--accent)",ACTIVE:"var(--color-wound)",EARLY_DRIFT:"var(--color-drift)",DEEP_DRIFT:"var(--color-fault)"};
+var STATE_GLOW={CALM:"133, 149, 174",WORKING:"45, 212, 167",ACTIVE:"74, 163, 255",EARLY_DRIFT:"245, 166, 35",DEEP_DRIFT:"255, 77, 94"};
 function setProgress(id,val,max){$(id).style.width=clamp((val/max)*100,0,100)+"%";}
 
 function loop(){
@@ -495,7 +529,10 @@ function loop(){
     } else {
       $("stateText").textContent=v.state;
       var labels=[];if(v.slightSlouch)labels.push("Наклон");if(v.muscleRelaxed)labels.push("Тонус↓");if(v.deepBreathing)labels.push("Дыхание");
-      $("actionText").textContent=labels.length?"Симптомы: "+labels.join(" + "):"→ Норма";
+      $("actionText").textContent=v.motionArtifact?"Движение/кручение — тревога блокирована":
+        (!v.quietReady?"Стабилизация — жду тихое окно":
+        (v.state==="WORKING"?"Рабочее окно — ищу медленный дрейф":
+        (labels.length?"Симптомы: "+labels.join(" + "):"→ Норма")));
       $("stagePanel").style.setProperty("--state-color",STATE_COLORS[v.state]);
       $("stagePanel").style.setProperty("--state-glow-rgb",STATE_GLOW[v.state]);
       if(v.state==="DEEP_DRIFT"){orb.classList.add("pulse-fast");speakAlarm();}
