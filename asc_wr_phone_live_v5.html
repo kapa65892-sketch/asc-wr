@@ -396,7 +396,7 @@ function onMotion(e){var a=e.accelerationIncludingGravity||e.acceleration;if(!a)
   if(e.rotationRate){lastRot={a:e.rotationRate.alpha||0,b:e.rotationRate.beta||0,g:e.rotationRate.gamma||0};hasGyro=true;}}
 function startDeviceMotion(){
   window.addEventListener("devicemotion",onMotion,true);
-  layer=new AscWrCore();sessionT0=Date.now();gravityRef=null;
+  layer=new AscWrCore();if(!sessionT0)sessionT0=Date.now();gravityRef=null;
   placement=$("placementSelect").value;sessionNote=$("sessionNote").value||"";
   autoCapDone=false;autoCapJitter=[];autoCapUnsettleCount=0;
   logEvent("SESSION_START");logEvent("MODE:КАРМАН-бедро");logEvent("PLACEMENT:"+placement);
@@ -548,6 +548,7 @@ $("recapBtn").addEventListener("click",function(){
 $("startBtn").addEventListener("click",async function(){
   var s=new SpeechSynthesisUtterance('');s.volume=0;synth.speak(s); // разблокировать TTS
   requestWakeLock();
+  sessionT0=Date.now();
   await startMicCapture();
   if(typeof DeviceMotionEvent!=="undefined"&&typeof DeviceMotionEvent.requestPermission==="function"){
     DeviceMotionEvent.requestPermission().then(function(r){if(r==="granted")startDeviceMotion();});
