@@ -1,618 +1,481 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="ru">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>ASC-WR Live (v9 · без магнита · автозахват опоры)</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<title>ASC-WR Live (v11 · логика v10 + аудио-синхро + голосовые метки)</title>
 <style>
-  :root {
-    --bg-dark:#07090e; --panel-bg:rgba(18,24,38,0.7); --panel-border:rgba(255,255,255,0.08);
-    --text-primary:#f0f4f9; --text-muted:#8595ae; --accent:#2dd4a7;
-    --color-normal:hsl(163,70%,50%); --color-drift:hsl(38,90%,55%); --color-wound:hsl(210,85%,60%);
-    --color-fault:hsl(350,85%,55%); --color-shift:hsl(250,75%,65%); --color-calm:#58677c;
-    --font-ui:'Inter',sans-serif; --font-mono:'JetBrains Mono',monospace;
-  }
-  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
-  body{background:radial-gradient(circle at 50% 0%,#111a2e 0%,var(--bg-dark) 70%);color:var(--text-primary);
-    font-family:var(--font-ui);min-height:100vh;padding:20px 16px;display:flex;flex-direction:column;gap:16px;max-width:480px;margin:0 auto;}
-  header{text-align:center;margin-bottom:5px;}
-  .logo{font-size:11px;font-weight:700;letter-spacing:3px;color:var(--text-muted);text-transform:uppercase;}
-  .logo span{color:var(--accent);text-shadow:0 0 10px rgba(45,212,167,0.4);}
-  .logo-sub{font-size:14px;font-weight:300;color:var(--text-primary);margin-top:4px;}
-  .disclaimer{margin:0;padding:12px;background:rgba(245,166,35,0.15);border:1px solid rgba(245,166,35,0.4);
-    border-radius:12px;font-size:10px;line-height:1.4;color:#f5a623;text-align:center;}
-  .panel{background:var(--panel-bg);border:1px solid var(--panel-border);backdrop-filter:blur(16px);
-    -webkit-backdrop-filter:blur(16px);border-radius:20px;padding:20px;position:relative;overflow:hidden;box-shadow:0 8px 32px 0 rgba(0,0,0,0.4);}
-  .core-display{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px 10px;gap:12px;}
-  .reactor-orb{width:110px;height:110px;border-radius:50%;background:radial-gradient(circle at 35% 35%,rgba(255,255,255,0.15) 0%,rgba(0,0,0,0.6) 80%);
-    border:2px solid var(--state-color,var(--color-normal));box-shadow:inset 0 0 20px var(--state-color,var(--color-normal)),0 0 30px rgba(var(--state-glow-rgb,45,212,167),0.35);
-    display:flex;align-items:center;justify-content:center;position:relative;transition:all 0.5s cubic-bezier(0.175,0.885,0.32,1.275);}
-  .reactor-orb::after{content:'';position:absolute;width:80%;height:80%;border-radius:50%;background:var(--state-color,var(--color-normal));opacity:0.15;filter:blur(8px);animation:pulse 2s infinite ease-in-out;}
-  .reactor-label{font-family:var(--font-mono);font-size:10px;letter-spacing:2px;color:var(--text-muted);text-transform:uppercase;}
-  .reactor-state-text{font-size:20px;font-weight:700;color:var(--state-color,var(--color-normal));text-shadow:0 0 15px rgba(var(--state-glow-rgb,45,212,167),0.3);text-align:center;letter-spacing:0.5px;}
-  .reactor-action-text{font-family:var(--font-mono);font-size:11px;color:var(--text-muted);background:rgba(0,0,0,0.25);padding:4px 12px;border-radius:99px;border:1px solid var(--panel-border);margin-top:4px;text-align:center;}
-  .metrics-grid{display:flex;flex-direction:column;gap:12px;}
-  .metric-card{display:grid;grid-template-columns:90px 1fr 66px;align-items:center;gap:12px;}
-  .metric-label{font-family:var(--font-mono);font-size:11px;color:var(--text-muted);text-transform:uppercase;}
-  .progress-bar-container{height:8px;background:rgba(0,0,0,0.4);border-radius:99px;border:1px solid rgba(255,255,255,0.03);overflow:hidden;position:relative;}
-  .progress-fill{height:100%;width:0%;border-radius:99px;background:var(--accent);box-shadow:0 0 8px var(--accent);transition:width 0.15s cubic-bezier(0.1,0.8,0.25,1);}
-  .metric-value{font-family:var(--font-mono);font-size:12px;text-align:right;font-weight:700;}
-  .chart-container{padding:10px;background:rgba(0,0,0,0.3);border-radius:14px;border:1px solid rgba(255,255,255,0.03);display:flex;flex-direction:column;gap:6px;}
-  .chart-title{font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;display:flex;justify-content:space-between;}
-  canvas{width:100%;height:70px;display:block;background:#040508;border-radius:8px;}
-  .btn{width:100%;padding:18px;border:none;border-radius:16px;font-family:var(--font-ui);font-size:14px;font-weight:700;cursor:pointer;text-transform:uppercase;letter-spacing:1px;transition:all 0.2s ease;box-shadow:0 4px 15px rgba(0,0,0,0.2);}
-  .btn-primary{background:linear-gradient(135deg,var(--accent) 0%,#1bb88f 100%);color:#031410;}
-  .btn-primary:active{transform:translateY(1px);}
-  .btn-secondary{background:rgba(31,42,58,0.4);border:1px solid rgba(255,255,255,0.05);color:var(--text-primary);}
-  .input-field{background:rgba(0,0,0,0.3);border:1px solid var(--panel-border);color:#fff;padding:12px;border-radius:8px;font-family:var(--font-ui);width:100%;}
-  #diagLog{background:#040508;border:1px solid rgba(255,255,255,0.05);border-radius:12px;padding:12px;font-family:var(--font-mono);font-size:10px;line-height:1.5;height:80px;overflow-y:auto;white-space:pre-wrap;color:#8fa1b3;}
-  .hidden{display:none !important;}
-
-  /* --- event marking --- */
-  .mode-line{font-family:var(--font-mono);font-size:11px;text-align:center;color:var(--text-muted);letter-spacing:1px;}
-  .mode-pocket{color:var(--color-calm);} .mode-pass{color:var(--color-drift);}
-  .event-btn{width:100%;padding:30px 18px;border:none;border-radius:20px;font-family:var(--font-ui);font-size:22px;font-weight:700;letter-spacing:1px;transition:all .15s ease;
-    -webkit-user-select:none;user-select:none;-webkit-touch-callout:none;touch-action:manipulation;}
-  .event-btn.locked{background:#161d28;color:#4a5563;box-shadow:none;cursor:not-allowed;}
-  .event-btn.armed{background:linear-gradient(135deg,#ff5a6a,#c2273a);color:#fff;box-shadow:0 0 26px rgba(255,77,94,.5);cursor:pointer;}
-  .event-btn.armed:active{transform:scale(0.98);}
-  .flash{animation:flash .5s ease;}
-  @keyframes flash{0%{background:#fff;}100%{}}
-  .refine-row{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;}
-  .refine-btn{padding:12px 6px;border:none;border-radius:12px;font-family:var(--font-ui);font-size:11px;font-weight:600;color:#fff;cursor:pointer;}
-  .r1{background:#7a6a1f;} .r2{background:#9a5a1a;} .r3{background:#8a2330;}
-  .refine-btn:active{transform:scale(0.97);}
-  .lock-ctl{width:100%;padding:14px;border:1px dashed var(--panel-border);border-radius:12px;background:rgba(0,0,0,0.2);
-    color:var(--text-muted);font-family:var(--font-mono);font-size:11px;text-align:center;cursor:pointer;
-    -webkit-user-select:none;-moz-user-select:none;user-select:none;-webkit-touch-callout:none;touch-action:manipulation;}
-  .logcount{font-family:var(--font-mono);font-size:10px;color:var(--text-muted);text-align:center;}
-
-  @keyframes orb-pulse-fast{0%{transform:scale(0.98);}50%{transform:scale(1.03);box-shadow:inset 0 0 30px var(--state-color),0 0 45px rgba(var(--state-glow-rgb),0.7);}100%{transform:scale(0.98);}}
-  .pulse-fast{animation:orb-pulse-fast 0.3s infinite ease-in-out !important;}
-  .pulse-slow{animation:orb-pulse-fast 1.0s infinite ease-in-out !important;}
+:root{--bg:#07090e;--panel:#0c1014;--border:#1a2330;--accent:#2dd4a7;--text:#e8e2d4;--dim:#5c6675;
+  --calm:#85aeae;--rest:#2dd4a7;--drift:#f5a623;--sleep:#ff4d5e;}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,sans-serif;margin:0;padding:14px;max-width:520px;margin:0 auto;}
+.logo{font-size:20px;font-weight:700;color:var(--accent);}
+.logo-sub{font-size:11px;color:var(--dim);margin-bottom:14px;}
+.panel{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:12px;}
+.btn{width:100%;border:none;border-radius:10px;color:#fff;font-weight:700;cursor:pointer;padding:16px;font-size:15px;}
+.btn-primary{background:var(--accent);color:#04231b;}
+.btn-secondary{background:#1a2330;color:var(--text);}
+.input-field{width:100%;padding:10px;border-radius:8px;background:#0c1014;border:1px solid var(--border);color:var(--text);margin-bottom:8px;font-size:13px;}
+.hidden{display:none;}
+#bigState{font-size:26px;font-weight:800;text-align:center;padding:18px;border-radius:12px;transition:background .3s;}
+.metrics-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;}
+.metric-card{background:#0c1014;border:1px solid var(--border);border-radius:10px;padding:8px;text-align:center;}
+.metric-label{font-size:10px;color:var(--dim);text-transform:uppercase;}
+.metric-value{font-size:18px;font-weight:700;margin-top:2px;}
+.bar-c{height:6px;background:#1a2330;border-radius:3px;overflow:hidden;margin-top:5px;}
+.bar-f{height:100%;background:var(--accent);width:0%;transition:width .2s;}
+canvas{width:100%;background:#0c1014;border-radius:10px;display:block;}
+.diag{font-size:11px;color:var(--dim);line-height:1.5;font-family:monospace;}
+.chart-title{font-size:12px;color:var(--dim);margin-bottom:6px;}
 </style>
 </head>
 <body>
-  <header>
-    <div class="logo">ASC-WR <span>Frontal Edge</span></div>
-    <div class="logo-sub">V9 · без магнита · автозахват опоры по затишью</div>
-  </header>
+<div class="logo">ASC-WR</div>
+<div class="logo-sub">V11 · ядро v10 + запись аудио (синхро-фон + голос-метки), без кнопок</div>
 
-  <div class="disclaimer">
-    <strong>ВНИМАНИЕ!</strong> Лишь дополнительная попытка подстраховать. НЕ ДАЁТ ГАРАНТИЙ и не заменяет отдых и бдительность.
+<!-- SETUP -->
+<div class="panel" id="setupPanel">
+  <div style="font-size:13px;margin-bottom:10px;">Положи телефон/талисман на ГРУДЬ или в карман. Нажми «Активировать», устройся — опора захватится сама по затишью.</div>
+  <input type="text" id="sessionNote" class="input-field" placeholder="заметка: поза, место, тест">
+  <label style="display:flex;align-items:center;gap:8px;font-size:13px;margin-bottom:10px;color:var(--text);">
+    <input type="checkbox" id="audioEnable" checked style="width:18px;height:18px;">
+    Писать аудио (синхро-фон салона + голосовые метки)
+  </label>
+  <button class="btn btn-primary" id="startBtn">▶ Активировать датчики</button>
+  <div class="diag" id="diagLog" style="margin-top:10px;">V11 загружен. Голос = метка. Звук салона = синхро-кварц. Жду активации.</div>
+</div>
+
+<!-- RUNTIME -->
+<div id="runtimePanel" class="hidden">
+  <div id="bigState" style="background:#1a2330;">ОЖИДАНИЕ</div>
+
+  <div class="panel chart-container">
+    <div class="chart-title">Тонус (активность тела) · красная линия = якорь тишины</div>
+    <canvas id="toneChart" height="150"></canvas>
   </div>
 
-  <div id="setupScreen" style="display:flex;flex-direction:column;gap:15px;">
-    <div class="panel" style="display:flex;flex-direction:column;gap:10px;">
-      <div style="font-size:11px;font-weight:bold;color:var(--text-muted);text-transform:uppercase;">Настройки пробуждения (Аудио)</div>
-      <input type="text" id="alarmPhrase" class="input-field" value="Игорь, проснись! Не спать!" placeholder="Фраза (до 5 слов)">
-      <select id="voiceSelect" class="input-field"><option value="">Загрузка голосов...</option></select>
-      <select id="langSelect" class="input-field">
-        <option value="ru-RU">Язык синтеза: Русский</option>
-        <option value="en-US">Язык синтеза: English</option>
-      </select>
-      <button class="btn btn-secondary" id="testVoiceBtn" style="padding:12px;font-size:12px;">🔊 Проверить голос</button>
-    </div>
-    <div class="panel" style="display:flex;flex-direction:column;gap:10px;">
-      <div style="font-size:12px;color:#8fa2b7;">Контекст записи</div>
-      <select id="placementSelect" class="input-field">
-        <option value="карман-бедро">карман / бедро</option>
-        <option value="грудь-лежа">грудь / лежа</option>
-        <option value="грудь-сидя">грудь / сидя</option>
-        <option value="телефон-медальон">телефон-медальон</option>
-        <option value="машина-пассажир">машина / пассажир</option>
-        <option value="прочее">прочее</option>
-      </select>
-      <input type="text" id="sessionNote" class="input-field" placeholder="заметка: тест, поза, поездка">
-      <label style="display:flex;align-items:center;gap:10px;font-size:12px;color:#8fa2b7;">
-        <input type="checkbox" id="micEnable" checked>
-        включить микрофон: дыхательные/голосовые признаки
-      </label>
-      <label style="display:flex;align-items:center;gap:10px;font-size:12px;color:#f5a623;">
-        <input type="checkbox" id="audioRecordEnable">
-        лаборатория: сохранить аудио отдельным файлом
-      </label>
-      <div style="font-size:10px;color:#6f7f93;line-height:1.35;">
-        Если включен микрофон, браузер спросит разрешение. Без разрешения микрофонные признаки и аудио не работают.
-      </div>
-    </div>
-    <div class="panel" style="display:flex;flex-direction:column;gap:15px;">
-      <div class="core-display" style="padding:5px;"><div class="reactor-orb" style="--state-color:var(--accent);--state-glow-rgb:45,212,167;width:60px;height:60px;"></div></div>
-      <div id="diagLog">V9 загружен. Магнитная ветка убрана. Автозахват опоры + IMU-лог. Активируйте сенсоры.</div>
-      <button class="btn btn-primary" id="startBtn">▶ Активировать компаратор</button>
-    </div>
+  <div class="panel metrics-grid">
+    <div class="metric-card"><div class="metric-label">Тонус</div><div class="bar-c"><div class="bar-f" id="barTone"></div></div><div class="metric-value" id="valTone">—</div></div>
+    <div class="metric-card"><div class="metric-label">Якорь тишины</div><div class="metric-value" id="valAnchor" style="font-size:15px;">—</div></div>
+    <div class="metric-card"><div class="metric-label">Дрейф /мин</div><div class="metric-value" id="valSlope" style="font-size:15px;">—</div></div>
+    <div class="metric-card"><div class="metric-label">Дыхание</div><div class="bar-c"><div class="bar-f" id="barBreath" style="background:var(--drift)"></div></div><div class="metric-value" id="valBreath" style="font-size:15px;">—</div></div>
+    <div class="metric-card"><div class="metric-label">Фон</div><div class="metric-value" id="valBg" style="font-size:13px;">—</div></div>
+    <div class="metric-card"><div class="metric-label">Записей</div><div class="metric-value" id="valLog" style="font-size:13px;">0</div></div>
   </div>
 
-  <div id="runtimeScreen" class="hidden" style="display:flex;flex-direction:column;gap:12px;">
-    <div class="panel core-display" id="stagePanel">
-      <div class="reactor-orb" id="reactorOrb"></div>
-      <div class="reactor-label" style="margin-top:8px;">Текущий вердикт коры:</div>
-      <div class="reactor-state-text" id="stateText">—</div>
-      <div class="reactor-action-text" id="actionText">—</div>
-    </div>
-
-    <div class="panel" style="display:flex;flex-direction:column;gap:12px;">
-      <div class="mode-line" id="modeLine">РЕЖИМ: голосовой лабораторный журнал</div>
-      <div class="logcount" id="logCount">записей в логе: 0 · событий: 0</div>
-      <button class="btn btn-primary" id="stopSaveBtn" style="padding:16px;font-size:14px;">■ СТОП И СКАЧАТЬ ЛОГ</button>
-    </div>
-
-    <div class="panel chart-container">
-      <div class="chart-title"><span>Дыхание / корпус (IMU wave)</span></div>
-      <canvas id="liveChart"></canvas>
-    </div>
-
-    <div class="panel metrics-grid">
-      <div class="metric-card"><div class="metric-label">Tilt Drift</div><div class="progress-bar-container"><div class="progress-fill" id="barSlowDrift"></div></div><div class="metric-value" id="valSlowDrift">0.0</div></div>
-      <div class="metric-card"><div class="metric-label">Gyro Tone</div><div class="progress-bar-container"><div class="progress-fill" id="barTone"></div></div><div class="metric-value" id="valTone">0.0</div></div>
-      <div class="metric-card"><div class="metric-label">Breathing</div><div class="progress-bar-container"><div class="progress-fill" id="barBreath" style="background:var(--color-shift);box-shadow:0 0 8px var(--color-shift)"></div></div><div class="metric-value" id="valBreath">0.0</div></div>
-      <div class="metric-card"><div class="metric-label">Mic Breath</div><div class="progress-bar-container"><div class="progress-fill" id="barMicBreath" style="background:#e0c45c;box-shadow:0 0 8px #e0c45c"></div></div><div class="metric-value" id="valMicBreath">off</div></div>
-      <div class="metric-card"><div class="metric-label">Synergy</div><div class="progress-bar-container"><div class="progress-fill" id="barSynergy" style="background:var(--color-wound);box-shadow:0 0 8px var(--color-wound)"></div></div><div class="metric-value" id="valSynergy">0/3</div></div>
-    </div>
-    <button class="btn btn-secondary" id="recapBtn" style="padding:14px;font-size:13px;">📍 Опора: пересброс наклона (ручной)</button>
-    <div class="metric-card"><div class="metric-label" style="grid-column:1/4;text-align:center;color:#5c6675;">Wake Lock держит экран · запись с момента запуска · опора валидна после AUTOCAP_SETTLE</div></div>
-  </div>
+  <button class="btn btn-secondary" id="recapBtn" style="margin-bottom:10px;">📍 Опора: я устроился (ручной сброс)</button>
+  <button class="btn btn-secondary" id="testSirenBtn" style="margin-bottom:10px;background:#3a1a1f;">🔊 Проверить сирену (2 сек)</button>
+  <button class="btn btn-primary" id="stopSaveBtn" style="background:#1a2330;color:var(--text);">■ Стоп и скачать лог</button>
+  <div class="diag" id="diagLog2" style="margin-top:10px;"></div>
+</div>
 
 <script>
 "use strict";
-// =============================================================================
-//  ASC-WR v9.  Над v8 добавлено:
-//   - АВТОЗАХВАТ ОПОРЫ: gravity reference захватывается автоматически после
-//     ~3 секунд затишья (телефон положен в карман и перестал двигаться).
-//     Показывается WARMUP с процентом. Сбрасывается при вынимании телефона.
-//   - Ручной пересброс опоры сохранён как fallback.
-//   - Каменный якорь (v5) сохранён: норма НЕ сползает под дрейфом.
-//   - Wake Lock, ЛОГ, голосовой лабораторный журнал.
-// =============================================================================
+function $(id){return document.getElementById(id);}
+function clamp(v,a,b){return v<a?a:(v>b?b:v);}
 
-var $=function(id){return document.getElementById(id);};
-function clamp(x,lo,hi){return Math.max(lo,Math.min(hi,x));}
-function scalar(v,f){return Number.isFinite(v)?v:(f||0);}
+// ============================================================
+//  ЯДРО v10: перевёрнутая логика.
+//  Активный фон (тонус высокий) -> прибор СПИТ, всё хорошо.
+//  Затишье -> прибор ПРОСЫПАЕТСЯ, ставит якорь, ищет ДРЕЙФ ВНИЗ.
+//  Состояния тишины:
+//    REST   - тихо, ровно, на высоком уровне -> норма, молчать
+//    DRIFT  - тихо, сползает вниз -> ЗАСЫПАЕШЬ -> ранний сигнал (вибро+голос)
+//    SLEEP  - тихо, плато на низком уровне + ровное дыхание -> ЗАСНУЛ -> СИРЕНА
+// ============================================================
 
-// ---------- TTS ----------
-var synth=window.speechSynthesis, systemVoices=[];
-function populateVoiceList(){
-  systemVoices=synth.getVoices(); var sel=$("voiceSelect"); sel.innerHTML='';
-  var sorted=systemVoices.slice().sort(function(a,b){
-    if(a.lang.indexOf("ru")>-1&&b.lang.indexOf("ru")<0)return -1;
-    if(a.lang.indexOf("ru")<0&&b.lang.indexOf("ru")>-1)return 1;
-    return a.name.localeCompare(b.name);});
-  if(sorted.length===0){sel.innerHTML='<option value="">Нет голосов</option>';return;}
-  sorted.forEach(function(v,i){var o=document.createElement('option');
-    o.textContent=v.name+' ('+v.lang+')'+(v.default?' -- DEFAULT':'');o.setAttribute('data-name',v.name);
-    if(v.name.toLowerCase().indexOf("milena")>-1||v.name.toLowerCase().indexOf("female")>-1)o.selected=true;else if(i===0)o.selected=true;
-    sel.appendChild(o);});
-}
-populateVoiceList();
-if(speechSynthesis.onvoiceschanged!==undefined)speechSynthesis.onvoiceschanged=populateVoiceList;
-var lastAlarmSpeakT=0;
-function speakAlarm(text,force){
-  var now=Date.now();
-  if(!force&&now-lastAlarmSpeakT<15000)return;
-  if(synth.speaking)return;
-  lastAlarmSpeakT=now;
-  var u=new SpeechSynthesisUtterance(text||$("alarmPhrase").value||"Проснись!");
-  var opt=$("voiceSelect").selectedOptions[0];
-  if(opt){var nm=opt.getAttribute('data-name');u.lang=$("langSelect").value;
-    for(var i=0;i<systemVoices.length;i++){if(systemVoices[i].name===nm){u.voice=systemVoices[i];break;}}}
-  u.pitch=1.2;u.rate=1.1;synth.speak(u);
-}
+// --- НАСТРОЙКИ (ручки, откалиброваны на реальной записи сна 06.06) ---
+var K = {
+  activityLevel: 6.0,    // тонус выше -> активный фон, прибор отдыхает
+  quietEnterSec: 4,      // секунд затишья до постановки якоря тишины
+  driftSlope:   -0.25,   // ед/мин: тонус сползает быстрее -> дрейф в сон
+  driftBelow:    0.8,    // тонус ниже якоря на столько -> дрейф
+  sleepLevel:    2.3,    // тонус ниже + ПЛОСКО -> кандидат в сон
+  sleepVar:      0.5,    // дисперсия тонуса ниже = плато (не рябь-борьба)
+  varWindowSec:  15,     // окно дисперсии
+  sleepConfirmSec: 15,   // секунд плоского низкого = подтверждённый сон
+  wakeLevel:     8.0,    // всплеск тонуса выше -> проснулся, сирену гасить
+  breathSteadyMax: 0.12  // амплитуда дыхания ниже -> признак ровного сна
+};
 
-// ---------- MIC BREATH EXPERIMENT ----------
-var micEnabled=false,micReady=false,micStream=null,micCtx=null,micAnalyser=null,micBuffer=null,micDetector=null;
-var micLevel=0,micWave=0,micBreathAmp=0;
-var audioRecordEnabled=false,audioRecorder=null,audioChunks=[],audioBlob=null,audioMime="";
-async function startMicCapture(){
-  micEnabled=$("micEnable")&&$("micEnable").checked;
-  audioRecordEnabled=$("audioRecordEnable")&&$("audioRecordEnable").checked;
-  if(audioRecordEnabled)micEnabled=true;
-  if(!micEnabled||!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia)return;
-  try{
-    micStream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false},video:false});
-    micCtx=new (window.AudioContext||window.webkitAudioContext)();
-    if(micCtx.state==="suspended")await micCtx.resume();
-    var src=micCtx.createMediaStreamSource(micStream);
-    micAnalyser=micCtx.createAnalyser();
-    micAnalyser.fftSize=1024;
-    src.connect(micAnalyser);
-    micBuffer=new Float32Array(micAnalyser.fftSize);
-    micDetector=micDetector||new BreathingDetector();
-    micDetector.reset();micReady=true;
-    if(audioRecordEnabled)startAudioRecording();
-    $("diagLog").textContent+="\nMIC: акустический канал включен"+(audioRecordEnabled?", аудио пишется отдельным файлом.":", аудио не пишется.");
-  }catch(e){
-    micReady=false;micEnabled=false;audioRecordEnabled=false;
-    $("diagLog").textContent+="\nMIC: не включен или нет разрешения.";
-  }
-}
-function pickAudioMime(){
-  var list=["audio/webm;codecs=opus","audio/webm","audio/mp4"];
-  if(!window.MediaRecorder)return"";
-  for(var i=0;i<list.length;i++){if(MediaRecorder.isTypeSupported(list[i]))return list[i];}
-  return"";
-}
-function startAudioRecording(){
-  if(!window.MediaRecorder||!micStream)return;
-  audioMime=pickAudioMime();audioChunks=[];audioBlob=null;
-  try{
-    audioRecorder=audioMime?new MediaRecorder(micStream,{mimeType:audioMime}):new MediaRecorder(micStream);
-    audioRecorder.ondataavailable=function(e){if(e.data&&e.data.size>0)audioChunks.push(e.data);};
-    audioRecorder.onstop=function(){
-      audioBlob=new Blob(audioChunks,{type:audioMime||"audio/webm"});
-      downloadAudioLog();
-    };
-    audioRecorder.start(1000);
-    logEvent("AUDIO_REC_START");
-  }catch(e){audioRecorder=null;audioRecordEnabled=false;$("diagLog").textContent+="\nAUDIO: запись не стартовала.";}
-}
-function stopAudioRecording(){
-  if(audioRecorder&&audioRecorder.state!=="inactive"){logEvent("AUDIO_REC_STOP");audioRecorder.stop();}
-}
-function downloadAudioLog(){
-  if(!audioBlob||audioBlob.size===0)return;
-  var ext=(audioBlob.type.indexOf("mp4")>-1)?"m4a":"webm";
-  var url=URL.createObjectURL(audioBlob);var a=document.createElement('a');
-  a.href=url;a.download="asc_wr_audio_"+new Date().toISOString().replace(/[:.]/g,"-")+"."+ext;
-  document.body.appendChild(a);a.click();document.body.removeChild(a);setTimeout(function(){URL.revokeObjectURL(url);},1000);
-}
-function updateMicBreath(){
-  if(!micReady||!micAnalyser)return{ready:false,level:0,wave:0,amp:0};
-  if(!micDetector)micDetector=new BreathingDetector();
-  micAnalyser.getFloatTimeDomainData(micBuffer);
-  var sum=0;
-  for(var i=0;i<micBuffer.length;i++){sum+=micBuffer[i]*micBuffer[i];}
-  micLevel=Math.sqrt(sum/micBuffer.length);
-  var b=micDetector.update(micLevel*100);
-  micWave=b.wave;micBreathAmp=b.amplitude;
-  return{ready:true,level:micLevel,wave:micWave,amp:micBreathAmp};
-}
-$("testVoiceBtn").addEventListener("click",function(){speakAlarm(null,true);});
-if($("audioRecordEnable"))$("audioRecordEnable").addEventListener("change",function(){
-  if(this.checked&&$("micEnable"))$("micEnable").checked=true;
-});
-if($("micEnable"))$("micEnable").addEventListener("change",function(){
-  if(!this.checked&&$("audioRecordEnable"))$("audioRecordEnable").checked=false;
-});
+function ema(x, prev, tau){ return prev===null ? x : prev + (x-prev)*tau; }
 
-// ---------- SLOW DRIFT (каменный якорь) ----------
-class SlowDriftDetector{
-  constructor(opts){opts=opts||{};
-    this.fastTau=opts.fastTau||0.15; this.slowTau=opts.slowTau||0.01;
-    this.activityWindow=opts.activityWindow||30; this.quietThreshold=opts.quietThreshold||0.6;
-    this.monotonWindow=opts.monotonWindow||40;
-    this.deadband=(opts.deadband!=null)?opts.deadband:0.05;
-    this.settleRate=(opts.settleRate!=null)?opts.settleRate:0.0008;
-    this.settleWindow=(opts.settleWindow!=null)?opts.settleWindow:600;
-    this.normTau=(opts.normTau!=null)?opts.normTau:0.0004;
-    this.reset();}
-  reset(){this.fast=null;this.slow=null;this.anchor=null;this.recent=[];this.slowHistory=[];
-    this.inWorkingZone=false;this.quietStreak=0;this._prevSlow=null;this._peak=0;this._settleStreak=0;this._settleLevel=null;}
-  update(value){
-    var v=scalar(value);
-    if(this.fast===null){this.fast=v;this.slow=v;this.anchor=v;}
-    this.fast=this.fast*(1-this.fastTau)+v*this.fastTau;
-    this.slow=this.slow*(1-this.slowTau)+v*this.slowTau;
-    var jitter=Math.abs(this.fast-this.slow);
-    this.recent.push(jitter);if(this.recent.length>this.activityWindow)this.recent.shift();
-    var activity=this.recent.reduce(function(a,b){return a+b;},0)/this.recent.length;
-    if(activity<this.quietThreshold)this.quietStreak++;else this.quietStreak=0;
-    if(!this.inWorkingZone&&this.quietStreak>=this.activityWindow){
-      this.inWorkingZone=true;this.anchor=this.slow;this.slowHistory=[];this._peak=0;this._settleStreak=0;this._settleLevel=null;}
-    var slowRate=Math.abs(this.slow-(this._prevSlow!=null?this._prevSlow:this.slow));this._prevSlow=this.slow;
-    var slowDrift=0,distance=0,monotonic=0,returning=false,suspected=false,reanchored=false;
-    if(this.inWorkingZone){
-      slowDrift=this.slow-this.anchor;distance=Math.abs(slowDrift);
-      this.slowHistory.push(this.slow);if(this.slowHistory.length>this.monotonWindow)this.slowHistory.shift();
-      var up=0,down=0;for(var i=1;i<this.slowHistory.length;i++){var d=this.slowHistory[i]-this.slowHistory[i-1];if(d>0)up++;else if(d<0)down++;}
-      monotonic=Math.abs(up-down)/((up+down)||1);
-      this._peak=Math.max(this._peak*0.999,distance);
-      returning=this._peak>this.deadband&&distance<this._peak*0.5;
-      suspected=distance>this.deadband;
-      if(!suspected){
-        this.anchor=this.anchor*(1-this.normTau)+this.slow*this.normTau;this._settleStreak=0;this._settleLevel=null;
-      }else{
-        var progressing=(monotonic>0.4&&!returning);
-        var stableNow=(slowRate<this.settleRate)&&!progressing;
-        if(stableNow){
-          if(this._settleLevel===null||Math.abs(this.slow-this._settleLevel)<this.deadband){
-            if(this._settleLevel===null)this._settleLevel=this.slow;this._settleStreak++;
-          }else{this._settleLevel=this.slow;this._settleStreak=0;}
-        }else{this._settleStreak=0;this._settleLevel=null;}
-        if(this._settleStreak>=this.settleWindow){this.anchor=this.slow;this._peak=0;this._settleStreak=0;this._settleLevel=null;reanchored=true;}
+var QuietWatcher = (function(){
+  function QW(){ this.reset(); }
+  QW.prototype.reset = function(){
+    this.toneSlow=null;
+    this.inQuiet=false; this.quietAnchor=null; this.quietStartT=null;
+    this.hist=[];               // [{t,v}] сглаж.тонус для наклона
+    this.varBuf=[];             // [{t,tone}] сырой тонус для дисперсии
+    this.sleepCondStartT=null;  // когда впервые наступило условие сна
+    this.state="WAIT";
+  };
+  QW.prototype.update = function(tone, breathAmp, breathRhythmic, tSec){
+    this.toneSlow = ema(tone, this.toneSlow, 0.04);
+    var slow = this.toneSlow;
+
+    // история сглаж.тонуса для наклона (окно 40с)
+    this.hist.push({t:tSec, v:slow});
+    while(this.hist.length>2 && tSec - this.hist[0].t > 40) this.hist.shift();
+    // буфер сырого тонуса для дисперсии (окно varWindowSec)
+    this.varBuf.push({t:tSec, v:tone});
+    while(this.varBuf.length>2 && tSec - this.varBuf[0].t > K.varWindowSec) this.varBuf.shift();
+
+    // --- активный фон? прибор отдыхает ---
+    if(slow > K.activityLevel){
+      this.inQuiet=false; this.quietAnchor=null; this.quietStartT=null; this.sleepCondStartT=null;
+      this.state="ACTIVE";
+      return this._out(slow, 0, breathAmp, 0);
+    }
+
+    // --- фон в затишье ---
+    if(!this.inQuiet){
+      if(this.quietStartT===null) this.quietStartT=tSec;
+      if(tSec - this.quietStartT > K.quietEnterSec){ this.inQuiet=true; this.quietAnchor=slow; }
+      else { this.state="SETTLING"; return this._out(slow, 0, breathAmp, 0); }
+    }
+
+    // наклон (ед/мин)
+    var slope=0;
+    if(this.hist.length>=5){
+      var n=this.hist.length, sx=0,sy=0,sxx=0,sxy=0, t0=this.hist[0].t;
+      for(var i=0;i<n;i++){var x=this.hist[i].t-t0, y=this.hist[i].v; sx+=x;sy+=y;sxx+=x*x;sxy+=x*y;}
+      var den=(n*sxx - sx*sx);
+      if(Math.abs(den)>1e-9) slope=((n*sxy - sx*sy)/den)*60;
+    }
+    // дисперсия сырого тонуса (рябь vs плато)
+    var tvar=99;
+    if(this.varBuf.length>5){
+      var m=0; for(var k=0;k<this.varBuf.length;k++)m+=this.varBuf[k].v; m/=this.varBuf.length;
+      var s2=0; for(var k2=0;k2<this.varBuf.length;k2++){var d=this.varBuf[k2].v-m; s2+=d*d;}
+      tvar=Math.sqrt(s2/this.varBuf.length);
+    }
+
+    // --- РАЗБОР ТИШИНЫ ---
+    // СОН: низкий уровень + ПЛОСКО (низкая дисперсия) длительно
+    if(slow < K.sleepLevel && tvar < K.sleepVar){
+      if(this.sleepCondStartT===null) this.sleepCondStartT=tSec;
+      if(tSec - this.sleepCondStartT > K.sleepConfirmSec){
+        this.state="SLEEP"; return this._out(slow, slope, breathAmp, tvar);
       }
+      this.state="DRIFT"; return this._out(slow, slope, breathAmp, tvar);  // низко, но ещё копится
+    } else {
+      this.sleepCondStartT=null;
     }
-    return{inWorkingZone:this.inWorkingZone,activity:activity,slowDriftAbs:distance,slowRate:slowRate,monotonic:monotonic,returning:returning,suspected:suspected,reanchored:reanchored};
-  }
+
+    // ДРЕЙФ: сползает вниз (наклон / ниже якоря / низкий но рябит)
+    if(slope < K.driftSlope || (this.quietAnchor!==null && slow < this.quietAnchor - K.driftBelow) || slow < K.sleepLevel){
+      this.state="DRIFT"; return this._out(slow, slope, breathAmp, tvar);
+    }
+
+    // ровная тишина = спокойный отдых
+    this.state="REST"; return this._out(slow, slope, breathAmp, tvar);
+  };
+  QW.prototype._out = function(slow, slope, breathAmp, tvar){
+    return {state:this.state, toneSlow:slow, slope:slope, anchor:this.quietAnchor,
+            inQuiet:this.inQuiet, breathAmp:breathAmp, tvar:tvar};
+  };
+  return QW;
+})();
+
+// ============================================================
+//  СЕНСОРЫ
+// ============================================================
+var last={x:0,y:0,z:0}, gravity={x:0,y:0,z:0}, gyroMag=0, linAccMag=0;
+var _loopHz=30;
+function loopHz(){ return _loopHz; }
+
+// дыхание: полоса из линейного ускорения (быстрая-медленная)
+var brFast=null, brSlow=null, brAmp=0;
+function feedBreath(a){
+  brFast = ema(a, brFast, 0.18); brSlow = ema(a, brSlow, 0.02);
+  var w = brFast - brSlow, aa=Math.abs(w);
+  brAmp = aa>brAmp ? brAmp+(aa-brAmp)*0.1 : brAmp+(aa-brAmp)*0.02;
+  return {wave:w, amp:brAmp};
 }
-class ToneFadeDetector{
-  constructor(){this.fastTau=0.1;this.baseTau=0.003;this.spikeClip=50;this.fadeRatio=0.40;this.baseMin=1.0;this.reset();}
-  reset(){this.fast=null;this.base=null;}
-  update(value){var v=Math.min(scalar(value),this.spikeClip);
-    if(this.fast===null){this.fast=v;this.base=v;}
-    this.fast=this.fast*(1-this.fastTau)+v*this.fastTau;
-    if(this.fast>this.base)this.base=this.base*(1-this.baseTau*3)+this.fast*(this.baseTau*3);
-    else this.base=this.base*(1-this.baseTau)+this.fast*this.baseTau;
-    var hasTone=this.base>this.baseMin,ratio=hasTone?this.fast/this.base:1;
-    return{tone:this.base,ratio:ratio,fading:hasTone&&ratio<this.fadeRatio};}
-}
-class BreathingDetector{
-  constructor(){this.fastTau=0.03;this.slowTau=0.002;this.ampTau=0.02;this.minAmplitude=0.15;this.reset();}
-  reset(){this.fast=null;this.slow=null;this.amplitude=0;}
-  update(value){var v=scalar(value);if(this.fast===null){this.fast=v;this.slow=v;}
-    this.fast+=(v-this.fast)*this.fastTau;this.slow+=(v-this.slow)*this.slowTau;
-    var wave=this.fast-this.slow,absWave=Math.abs(wave);
-    if(absWave>this.amplitude)this.amplitude+=(absWave-this.amplitude)*0.1;else this.amplitude+=(absWave-this.amplitude)*this.ampTau;
-    return{wave:wave,amplitude:this.amplitude,isRhythmic:this.amplitude>this.minAmplitude};}
-}
-var V_STATES=Object.freeze({CALM:"CALM",WORKING:"WORKING",ACTIVE:"ACTIVE",EARLY_DRIFT:"EARLY_DRIFT",DEEP_DRIFT:"DEEP_DRIFT"});
-class AscWrCore{
-  constructor(){
-    this.tiltDetector=new SlowDriftDetector();
-    this.toneDetector=new ToneFadeDetector();
-    this.breathDetector=new BreathingDetector();
-    this.earlyDrift=0.35;
-    this.quietNeed=180;this.earlyNeed=60;this.fireNeed=240;this.clearNeed=180;
-    this._earlyStreak=0;this._fireStreak=0;this._clearStreak=0;this.alarmLatched=false;this.motionHold=0;this.quietStreak=0;
-    this.wakeTonePeak=0;this.wakeBreathPeak=0;this.collapseStreak=0;
+// грубая ритмичность дыхания: считаем пересечения нуля волны за окно
+var brZero=[], brRhythmic=false;
+function breathRhythm(wave, tSec){
+  if(brZero.length===0){ brZero.push({t:tSec,s:Math.sign(wave)}); }
+  else{
+    var lastS=brZero[brZero.length-1].s, s=Math.sign(wave);
+    if(s!==0 && s!==lastS) brZero.push({t:tSec,s:s});
   }
-  reset(){this.tiltDetector.reset();this.toneDetector.reset();this.breathDetector.reset();
-    this._earlyStreak=0;this._fireStreak=0;this._clearStreak=0;this.alarmLatched=false;this.motionHold=0;this.quietStreak=0;
-    this.wakeTonePeak=0;this.wakeBreathPeak=0;this.collapseStreak=0;}
-  tick(frame){
-    var tilt=scalar(frame.tilt),gyro=scalar(frame.gyroMag),force=scalar(frame.velocity);
-    var tiltInfo=this.tiltDetector.update(tilt);
-    var toneInfo=this.toneDetector.update(gyro);
-    var breathInfo=this.breathDetector.update(force);
-    var handlingArtifact=force>1.0||gyro>45;
-    if(handlingArtifact)this.motionHold=90;else if(this.motionHold>0)this.motionHold--;
-    var motionArtifact=this.motionHold>0;
-    var quietNow=!motionArtifact&&tiltInfo.inWorkingZone&&force<0.35&&gyro<8;
-    if(quietNow)this.quietStreak=Math.min(this.quietStreak+1,6000);else this.quietStreak=0;
-    var quietReady=this.quietStreak>=this.quietNeed;
-    if(!motionArtifact&&!quietReady){
-      this.wakeTonePeak=Math.max(this.wakeTonePeak*0.9995,toneInfo.tone);
-      this.wakeBreathPeak=Math.max(this.wakeBreathPeak*0.9995,breathInfo.amplitude);
-    }
-    var toneCollapsed=quietReady&&this.wakeTonePeak>1.2&&toneInfo.tone<this.wakeTonePeak*0.35;
-    var breathCollapsed=quietReady&&this.wakeBreathPeak>0.08&&breathInfo.amplitude<this.wakeBreathPeak*0.25;
-    var quietCollapse=toneCollapsed&&breathCollapsed;
-    this.collapseStreak=quietCollapse?this.collapseStreak+1:0;
-    var slowDrowseDrift=quietReady&&tiltInfo.slowDriftAbs>this.earlyDrift*0.4;
-    var muscleRelaxed=quietReady&&toneInfo.fading;
-    var breathQuiet=quietReady&&breathInfo.amplitude<0.035&&this.quietStreak>this.quietNeed*2;
-    var deepBreathing=quietReady&&breathInfo.isRhythmic&&!breathQuiet;
-    var slightSlouch=slowDrowseDrift;
-    var synergyCount=(slightSlouch?1:0)+(muscleRelaxed?1:0)+(deepBreathing?1:0);
-    if(motionArtifact){
-      this._earlyStreak=0;this._fireStreak=0;this.quietStreak=0;this._clearStreak=Math.min(this.clearNeed,this._clearStreak+3);
-      if(this._clearStreak>=12)this.alarmLatched=false;
-      return{state:V_STATES.ACTIVE,synergyCount:0,tiltDrift:tiltInfo.slowDriftAbs,tone:toneInfo.tone,
-        toneRatio:toneInfo.ratio,breathWave:breathInfo.wave,breathAmp:breathInfo.amplitude,
-        muscleRelaxed:false,deepBreathing:false,slightSlouch:false,tiltActivity:tiltInfo.activity,
-        motionArtifact:true,motionLevel:force,gyroLevel:gyro,quietReady:false,quietStreak:0,driftStreak:0,
-        quietCollapse:false,collapseStreak:0,wakeTonePeak:this.wakeTonePeak,wakeBreathPeak:this.wakeBreathPeak};
-    }
-    if(!quietReady){
-      this._earlyStreak=0;this._fireStreak=0;this._clearStreak=Math.min(this.clearNeed,this._clearStreak+1);
-      if(this._clearStreak>=this.clearNeed)this.alarmLatched=false;
-      return{state:tiltInfo.inWorkingZone?V_STATES.WORKING:V_STATES.CALM,synergyCount:0,tiltDrift:tiltInfo.slowDriftAbs,tone:toneInfo.tone,
-        toneRatio:toneInfo.ratio,breathWave:breathInfo.wave,breathAmp:breathInfo.amplitude,
-        muscleRelaxed:false,deepBreathing:false,slightSlouch:false,tiltActivity:tiltInfo.activity,
-        motionArtifact:false,motionLevel:force,gyroLevel:gyro,quietReady:false,quietStreak:this.quietStreak,driftStreak:0,
-        quietCollapse:false,collapseStreak:0,wakeTonePeak:this.wakeTonePeak,wakeBreathPeak:this.wakeBreathPeak};
-    }
-    var rawEarly=quietCollapse||(slowDrowseDrift&&(muscleRelaxed||breathQuiet||deepBreathing));
-    var rawDeep=rawEarly&&(breathQuiet||toneCollapsed||breathCollapsed||muscleRelaxed);
-    this._earlyStreak=rawEarly?this._earlyStreak+1:0;
-    this._fireStreak=rawDeep?this._fireStreak+1:0;
-    this._clearStreak=(!rawEarly&&synergyCount===0)?this._clearStreak+1:0;
-    if(!this.alarmLatched&&this._fireStreak>=this.fireNeed)this.alarmLatched=true;
-    if(this.alarmLatched&&this._clearStreak>=this.clearNeed)this.alarmLatched=false;
-    var state=V_STATES.WORKING;
-    if(this.alarmLatched)state=V_STATES.DEEP_DRIFT;
-    else if(this._earlyStreak>=this.earlyNeed)state=V_STATES.EARLY_DRIFT;
-    return{state:state,synergyCount:synergyCount,tiltDrift:tiltInfo.slowDriftAbs,tone:toneInfo.tone,
-      toneRatio:toneInfo.ratio,breathWave:breathInfo.wave,breathAmp:breathInfo.amplitude,
-      muscleRelaxed:muscleRelaxed,deepBreathing:deepBreathing,slightSlouch:slightSlouch,tiltActivity:tiltInfo.activity,
-      motionArtifact:false,motionLevel:force,gyroLevel:gyro,quietReady:true,quietStreak:this.quietStreak,driftStreak:this._fireStreak,
-      quietCollapse:quietCollapse,collapseStreak:this.collapseStreak,wakeTonePeak:this.wakeTonePeak,wakeBreathPeak:this.wakeBreathPeak};
-  }
+  while(brZero.length>1 && tSec-brZero[0].t>30) brZero.shift();
+  // 12-20 вдохов/мин -> 24-40 пересечений за минуту -> в 30с окне ~12-20
+  var crossings=brZero.length;
+  brRhythmic = (crossings>=8 && crossings<=26);
+  return brRhythmic;
 }
 
-// ---------- SENSORS ----------
-var layer=null,last={x:0,y:0,z:0},lastRot={a:0,b:0,g:0},hasGyro=false,chartData=[];
-var gravity={x:0,y:0,z:0},isGravityInitialized=false,gravityRef=null;
-function toFrame(ax,ay,az,t){
-  if(!isGravityInitialized){gravity.x=ax;gravity.y=ay;gravity.z=az;isGravityInitialized=true;}
-  var alpha=0.98;gravity.x=alpha*gravity.x+(1-alpha)*ax;gravity.y=alpha*gravity.y+(1-alpha)*ay;gravity.z=alpha*gravity.z+(1-alpha)*az;
-  var lx=ax-gravity.x,ly=ay-gravity.y,lz=az-gravity.z,motionMag=Math.sqrt(lx*lx+ly*ly+lz*lz);
-  var gMag=Math.sqrt(gravity.x*gravity.x+gravity.y*gravity.y+gravity.z*gravity.z)||1e-9,tiltAngle=0;
-  if(gravityRef){var dot=(gravity.x*gravityRef.x+gravity.y*gravityRef.y+gravity.z*gravityRef.z)/gMag;tiltAngle=Math.acos(clamp(dot,-1,1));}
-  var gyroMag=hasGyro?Math.sqrt(lastRot.a*lastRot.a+lastRot.b*lastRot.b+lastRot.g*lastRot.g):0;
-  return{timestamp:t,velocity:motionMag,tilt:tiltAngle,gyroMag:gyroMag};
-}
-function captureGravityRef(){var gMag=Math.sqrt(gravity.x*gravity.x+gravity.y*gravity.y+gravity.z*gravity.z)||1e-9;
-  gravityRef={x:gravity.x/gMag,y:gravity.y/gMag,z:gravity.z/gMag};}
-function onMotion(e){var a=e.accelerationIncludingGravity||e.acceleration;if(!a)return;
-  last={x:a.x||0,y:a.y||0,z:a.z||0};
-  if(e.rotationRate){lastRot={a:e.rotationRate.alpha||0,b:e.rotationRate.beta||0,g:e.rotationRate.gamma||0};hasGyro=true;}}
 function startDeviceMotion(){
-  window.addEventListener("devicemotion",onMotion,true);
-  layer=new AscWrCore();if(!sessionT0)sessionT0=Date.now();gravityRef=null;
-  placement=$("placementSelect").value;sessionNote=$("sessionNote").value||"";
-  autoCapDone=false;autoCapJitter=[];autoCapUnsettleCount=0;
-  logEvent("SESSION_START");logEvent("MODE:КАРМАН-бедро");logEvent("PLACEMENT:"+placement);
-  $("setupScreen").classList.add("hidden");$("runtimeScreen").classList.remove("hidden");
-  loop();
+  window.addEventListener("devicemotion", function(e){
+    var ag=e.accelerationIncludingGravity||{}, a=e.acceleration||{}, rr=e.rotationRate||{};
+    if(ag.x!=null){
+      last.x=ag.x; last.y=ag.y; last.z=ag.z;
+      // гравитация - медленная составляющая
+      gravity.x=ema(ag.x,gravity.x===0?ag.x:gravity.x,0.02);
+      gravity.y=ema(ag.y,gravity.y===0?ag.y:gravity.y,0.02);
+      gravity.z=ema(ag.z,gravity.z===0?ag.z:gravity.z,0.02);
+    }
+    if(a.x!=null) linAccMag=Math.sqrt(a.x*a.x+a.y*a.y+a.z*a.z);
+    else if(ag.x!=null){ var dx=ag.x-gravity.x,dy=ag.y-gravity.y,dz=ag.z-gravity.z; linAccMag=Math.sqrt(dx*dx+dy*dy+dz*dz); }
+    if(rr.alpha!=null) gyroMag=Math.sqrt(rr.alpha*rr.alpha+rr.beta*rr.beta+rr.gamma*rr.gamma);
+  }, true);
 }
 
-// ---------- WAKE LOCK ----------
-var wakeLock=null;
-async function requestWakeLock(){try{if('wakeLock' in navigator){wakeLock=await navigator.wakeLock.request('screen');}}catch(e){}}
-document.addEventListener('visibilitychange',function(){if(wakeLock!==null&&document.visibilityState==='visible')requestWakeLock();});
-
-// ---------- ЛОГ ----------
-var logRows=[];           // IMU-only: фон -> тишина, без магнитной ветки
-var eventCount=0, sessionT0=0, mode="КАРМАН-бедро", placement="", sessionNote="", lastLogT=0, prevState="CALM", recording=true;
-// --- v9: автозахват опоры по затишью ---
-var autoCapJitter=[], autoCapWindow=180, autoCapThreshold=0.5, autoCapDone=false, autoCapUnsettleCount=0, lastQuietAvg="";
-function pushRow(v, eventTag){
-  logRows.push({
-    t: Date.now()-sessionT0,
-    mode: mode,
-    placement: placement,
-    note: sessionNote,
-    autoCap: autoCapDone?1:0,
-    quietAvg: (lastQuietAvg!==""?+lastQuietAvg.toFixed(4):""),
-    motionArtifact: v?(v.motionArtifact?1:0):"",
-    motionLevel: v?(+v.motionLevel.toFixed(4)):"",
-    gyroLevel: v?(+v.gyroLevel.toFixed(2)):"",
-    quietReady: v?(v.quietReady?1:0):"",
-    quietStreak: v?v.quietStreak:"",
-    driftStreak: v?v.driftStreak:"",
-    quietCollapse: v?(v.quietCollapse?1:0):"",
-    collapseStreak: v?v.collapseStreak:"",
-    wakeTonePeak: v?(+v.wakeTonePeak.toFixed(3)):"",
-    wakeBreathPeak: v?(+v.wakeBreathPeak.toFixed(4)):"",
-    micOn: micReady?1:0,
-    audioRec: audioRecordEnabled?1:0,
-    micLevel: micReady?(+micLevel.toFixed(5)):"",
-    micBreathAmp: micReady?(+micBreathAmp.toFixed(4)):"",
-    micWave: micReady?(+micWave.toFixed(4)):"",
-    tilt: v?(+v.tiltDrift.toFixed(4)):"",
-    tiltDrift: v?(+v.tiltDrift.toFixed(4)):"",
-    tone: v?(+v.tone.toFixed(2)):"",
-    toneRatio: v?(+v.toneRatio.toFixed(3)):"",
-    breathAmp: v?(+v.breathAmp.toFixed(4)):"",
-    breathWave: v?(+v.breathWave.toFixed(4)):"",
-    synergy: v?v.synergyCount:"",
-    state: v?v.state:"",
-    symptoms: v?[(v.motionArtifact?"active":""),(v.quietCollapse?"collapse":""),(v.slightSlouch?"tilt":""),(v.muscleRelaxed?"tone":""),(v.deepBreathing?"breath":"")].filter(Boolean).join("+"):"",
-    event: eventTag||""
-  });
+// ============================================================
+//  ТРЕВОГА: лестница вибро/голос/сирена
+// ============================================================
+var audioCtx=null, sirenOsc=null, sirenGain=null, sirenOn=false, sirenTimer=null;
+function ensureAudio(){
+  if(!audioCtx){ try{ audioCtx=new (window.AudioContext||window.webkitAudioContext)(); }catch(e){} }
+  if(audioCtx && audioCtx.state==="suspended") audioCtx.resume();
 }
-function logEvent(tag){ pushRow(window._lastV||null, tag); if(tag)eventCount++; updateLogCount(); }
-function updateLogCount(){ $("logCount").textContent="записей в логе: "+logRows.length+" · событий: "+eventCount; }
+function startSiren(){
+  if(sirenOn) return; ensureAudio(); if(!audioCtx) return;
+  try{
+    sirenOsc=audioCtx.createOscillator(); sirenGain=audioCtx.createGain();
+    sirenOsc.type="square"; sirenGain.gain.value=1.0;
+    sirenOsc.connect(sirenGain); sirenGain.connect(audioCtx.destination);
+    sirenOsc.start(); sirenOn=true; warble();
+  }catch(e){}
+}
+function warble(){
+  if(!sirenOn||!sirenOsc||!audioCtx) return;
+  var t=audioCtx.currentTime;
+  try{
+    sirenOsc.frequency.setValueAtTime(660,t);
+    sirenOsc.frequency.linearRampToValueAtTime(1320,t+0.35);
+    sirenOsc.frequency.linearRampToValueAtTime(660,t+0.7);
+  }catch(e){}
+  sirenTimer=setTimeout(warble,700);
+}
+function stopSiren(){
+  if(!sirenOn) return;
+  try{ sirenOsc.stop(); sirenOsc.disconnect(); sirenGain.disconnect(); }catch(e){}
+  sirenOsc=null; sirenOn=false; if(sirenTimer){clearTimeout(sirenTimer);sirenTimer=null;}
+}
+var synth=window.speechSynthesis;
+var lastTts=0;
+function speak(text){
+  if(!synth) return; var now=Date.now(); if(now-lastTts<3500) return; lastTts=now;
+  try{ var u=new SpeechSynthesisUtterance(text); u.lang="ru-RU"; u.volume=1; u.rate=1.05; synth.speak(u);}catch(e){}
+}
+var lastVib=0;
+function vibrate(p){ if(navigator.vibrate){var now=Date.now(); if(now-lastVib>800){navigator.vibrate(p);lastVib=now;}} }
 
+// ============================================================
+//  АУДИО: синхро-фон салона (кварц для склейки) + голосовые метки
+//  (твой голос, «не спи!» жены, гудки — всё это метки во времени)
+// ============================================================
+var mediaRecorder=null, audioChunks=[], audioMime="", audioStream=null, audioWanted=true;
+function pickAudioMime(){
+  var types=['audio/webm;codecs=opus','audio/webm','audio/mp4','audio/ogg;codecs=opus','audio/ogg'];
+  for(var i=0;i<types.length;i++){ try{ if(window.MediaRecorder && MediaRecorder.isTypeSupported(types[i])) return types[i]; }catch(e){} }
+  return "";
+}
+function startAudio(){
+  if(!audioWanted) return;
+  if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){ logEvent("AUDIO_NO_API"); return; }
+  navigator.mediaDevices.getUserMedia({audio:true}).then(function(stream){
+    audioStream=stream; audioMime=pickAudioMime();
+    try{ mediaRecorder = audioMime ? new MediaRecorder(stream,{mimeType:audioMime}) : new MediaRecorder(stream); }
+    catch(e){ try{mediaRecorder=new MediaRecorder(stream);}catch(e2){logEvent("AUDIO_FAIL");return;} }
+    audioChunks=[];
+    mediaRecorder.ondataavailable=function(e){ if(e.data&&e.data.size>0) audioChunks.push(e.data); };
+    mediaRecorder.start(2000);  // кусок раз в 2с — переживает короткие сбои
+    logEvent("AUDIO_REC_START");   // эта метка привязывает аудио t=0 к t_ms лога
+  }).catch(function(){ logEvent("AUDIO_DENIED"); });
+}
+function stopAudioAndDownload(){
+  if(!mediaRecorder){ return; }
+  mediaRecorder.onstop=function(){
+    if(!audioChunks.length) return;
+    var blob=new Blob(audioChunks,{type:audioMime||'audio/webm'});
+    var ext = audioMime.indexOf('mp4')>=0?'m4a':(audioMime.indexOf('ogg')>=0?'ogg':'webm');
+    var url=URL.createObjectURL(blob), a=document.createElement('a');
+    a.href=url; a.download="asc_wr_v11_audio_"+new Date().toISOString().replace(/[:.]/g,'-')+'.'+ext;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(function(){URL.revokeObjectURL(url);},2000);
+    if(audioStream) audioStream.getTracks().forEach(function(t){t.stop();});
+  };
+  try{ mediaRecorder.stop(); }catch(e){}
+}
+
+// ============================================================
+//  ЛОГ
+// ============================================================
+var logRows=[], sessionT0=0, recording=true, note="";
+function pushRow(v, ev){
+  logRows.push({t:Date.now()-sessionT0, tone:v?v.tone:"", toneSlow:v?(+v.toneSlow.toFixed(2)):"",
+    slope:v?(+v.slope.toFixed(3)):"", anchor:(v&&v.anchor!=null)?(+v.anchor.toFixed(2)):"",
+    tvar:(v&&v.tvar!=null)?(+v.tvar.toFixed(3)):"",
+    breath:v?(+v.breathAmp.toFixed(3)):"", state:v?v.state:"", event:ev||""});
+  $("valLog").textContent=logRows.length;
+}
+function logEvent(ev){ pushRow(window._lastV||null, ev); }
 function downloadLog(){
-  if(logRows.length===0){alert("Лог пуст");return;}
-  var cols=["t_ms","mode","placement","note","autoCap","quietAvg","motionArtifact","motionLevel","gyroLevel","quietReady","quietStreak","driftStreak","quietCollapse","collapseStreak","wakeTonePeak","wakeBreathPeak","micOn","audioRec","micLevel","micBreathAmp","micWave","tilt","tiltDrift","tone","toneRatio","breathAmp","breathWave","synergy","state","symptoms","event"];
+  if(!logRows.length){alert("Лог пуст");return;}
+  var cols=["t_ms","tone","toneSlow","slope_per_min","quietAnchor","toneVar","breathAmp","state","event"];
   var lines=[cols.join(",")];
   for(var i=0;i<logRows.length;i++){var r=logRows[i];
-    lines.push([r.t,'"'+r.mode+'"','"'+r.placement+'"','"'+String(r.note).replace(/"/g,"'")+'"',r.autoCap,r.quietAvg,r.motionArtifact,r.motionLevel,r.gyroLevel,r.quietReady,r.quietStreak,r.driftStreak,r.quietCollapse,r.collapseStreak,r.wakeTonePeak,r.wakeBreathPeak,r.micOn,r.audioRec,r.micLevel,r.micBreathAmp,r.micWave,r.tilt,r.tiltDrift,r.tone,r.toneRatio,r.breathAmp,r.breathWave,r.synergy,r.state,'"'+r.symptoms+'"','"'+r.event+'"'].join(","));}
-  var blob=new Blob([lines.join("\n")],{type:'text/csv'});
-  var url=URL.createObjectURL(blob);var a=document.createElement('a');
-  a.href=url;a.download="asc_wr_log_"+new Date().toISOString().replace(/[:.]/g,"-")+".csv";
-  document.body.appendChild(a);a.click();document.body.removeChild(a);setTimeout(function(){URL.revokeObjectURL(url);},1000);
+    lines.push([r.t,r.tone,r.toneSlow,r.slope,r.anchor,r.tvar,r.breath,r.state,'"'+r.event+'"'].join(","));}
+  var blob=new Blob([lines.join("\n")],{type:"text/csv"});
+  var url=URL.createObjectURL(blob), a=document.createElement("a");
+  a.href=url; a.download="asc_wr_v10_"+new Date().toISOString().replace(/[:.]/g,"-")+".csv";
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(function(){URL.revokeObjectURL(url);},1000);
 }
 
-// ---------- UI LOOP ----------
-var STATE_COLORS={CALM:"var(--color-calm)",WORKING:"var(--accent)",ACTIVE:"var(--color-wound)",EARLY_DRIFT:"var(--color-drift)",DEEP_DRIFT:"var(--color-fault)"};
-var STATE_GLOW={CALM:"133, 149, 174",WORKING:"45, 212, 167",ACTIVE:"74, 163, 255",EARLY_DRIFT:"245, 166, 35",DEEP_DRIFT:"255, 77, 94"};
-function setProgress(id,val,max){$(id).style.width=clamp((val/max)*100,0,100)+"%";}
+// ============================================================
+//  ОПОРА (для наклона; в v10 второстепенно, тонус — главный)
+// ============================================================
+var autoJitter=[], autoWin=120, autoThresh=0.5, autoDone=false, autoUnsettle=0;
+
+// ============================================================
+//  ГЛАВНЫЙ ЦИКЛ
+// ============================================================
+var watcher=null, lastLogT=0, prevState="WAIT", tStart=0;
+var toneBuf=[], anchorBuf=[];
+
+function setBig(state){
+  var el=$("bigState"), bg="#1a2330", txt="—";
+  if(state==="ACTIVE"){bg="#13301f";txt="БОДР · активность";}
+  else if(state==="SETTLING"){bg="#1a2330";txt="устраиваюсь…";}
+  else if(state==="REST"){bg="#0d3b2e";txt="✓ ПОКОЙ · норма";}
+  else if(state==="DRIFT"){bg="#5a3d0a";txt="⚠ ДРЕЙФ ВНИЗ · засыпаешь!";}
+  else if(state==="SLEEP"){bg="#5a0d16";txt="🚨 СОН · ПРОСНИСЬ!";}
+  else if(state==="WAIT"){txt="ОЖИДАНИЕ";}
+  el.style.background=bg; el.textContent=txt;
+}
 
 function loop(){
-  if(layer){
-    var frame=toFrame(last.x,last.y,last.z,performance.now());
-    // v9: автозахват опоры по затишью
-    var _gm=Math.sqrt(gravity.x*gravity.x+gravity.y*gravity.y+gravity.z*gravity.z);
-    if(!gravityRef&&_gm>5)captureGravityRef(); // грубый начальный
-    if(_gm>5){
-      autoCapJitter.push(frame.velocity);
-      if(autoCapJitter.length>autoCapWindow)autoCapJitter.shift();
-      if(!autoCapDone&&autoCapJitter.length>=autoCapWindow){
-        var _avgJ=autoCapJitter.reduce(function(a,b){return a+b;},0)/autoCapJitter.length;
-        lastQuietAvg=_avgJ;
-        if(_avgJ<autoCapThreshold){
-          captureGravityRef();layer.reset();
-          autoCapDone=true;logEvent("AUTOCAP_SETTLE");
-          navigator.vibrate&&navigator.vibrate([30,50,30]);
-          $("recapBtn").textContent="✓ опора авто-захвачена";
-          setTimeout(function(){$("recapBtn").textContent="📍 Опора: пересброс наклона (ручной)";},3000);
-        }
+  if(watcher){
+    var tSec=(performance.now()-tStart)/1000;
+    var gm=Math.sqrt(gravity.x*gravity.x+gravity.y*gravity.y+gravity.z*gravity.z);
+
+    // дыхание
+    var b=feedBreath(linAccMag);
+    var rhythmic=breathRhythm(b.wave, tSec);
+
+    // автозахват опоры по затишью (для наклона; не влияет на тревогу)
+    if(gm>5){
+      autoJitter.push(linAccMag); if(autoJitter.length>autoWin)autoJitter.shift();
+      if(!autoDone && autoJitter.length>=autoWin){
+        var avg=autoJitter.reduce(function(a,c){return a+c;},0)/autoJitter.length;
+        if(avg<autoThresh){ autoDone=true; logEvent("AUTOCAP_SETTLE"); vibrate([30,40,30]); }
       }
-      if(autoCapDone&&frame.velocity>2.0){autoCapUnsettleCount++;
-        if(autoCapUnsettleCount>120){autoCapDone=false;autoCapJitter=[];autoCapUnsettleCount=0;lastQuietAvg="";logEvent("AUTOCAP_RESET");}
-      }else{autoCapUnsettleCount=0;}
+      if(autoDone && linAccMag>2.0){ autoUnsettle++; if(autoUnsettle>90){autoDone=false;autoJitter=[];autoUnsettle=0;logEvent("AUTOCAP_RESET");} }
+      else autoUnsettle=0;
     }
-    var v=layer.tick(frame); window._lastV=v;
 
-    var orb=$("reactorOrb");orb.className="reactor-orb";
-    if(!autoCapDone){
-      var _pct=Math.min(100,Math.round((autoCapJitter.length/autoCapWindow)*100));
-      $("stateText").textContent="WARMUP";
-      $("actionText").textContent="⏳ "+_pct+"% — положите в карман и не трогайте";
-      $("stagePanel").style.setProperty("--state-color","var(--color-calm)");
-      $("stagePanel").style.setProperty("--state-glow-rgb","133, 149, 174");
+    // ЯДРО
+    var v=watcher.update(gyroMag, b.amp, rhythmic, tSec);
+    v.tone=+gyroMag.toFixed(2);
+    window._lastV=v;
+
+    // --- ТРЕВОГА: лестница ---
+    if(v.state==="DRIFT"){
+      stopSiren();
+      speak("дрейф, проснись");
+      vibrate([200,100,200]);
+    } else if(v.state==="SLEEP"){
+      startSiren();                       // сирена не умолкает, пока не проснулся
+      vibrate([400,150,400,150,400]);
     } else {
-      $("stateText").textContent=v.state;
-      var labels=[];if(v.quietCollapse)labels.push("Схлоп фона");if(v.slightSlouch)labels.push("Наклон");if(v.muscleRelaxed)labels.push("Тонус↓");if(v.deepBreathing)labels.push("Дыхание");
-      $("actionText").textContent=v.motionArtifact?"Движение/кручение — тревога блокирована":
-        (!v.quietReady?"Стабилизация — жду тихое окно":
-        (v.state==="WORKING"?"Рабочее окно — ищу медленный дрейф":
-        (labels.length?"Симптомы: "+labels.join(" + "):"→ Норма")));
-      $("stagePanel").style.setProperty("--state-color",STATE_COLORS[v.state]);
-      $("stagePanel").style.setProperty("--state-glow-rgb",STATE_GLOW[v.state]);
-      if(v.state==="DEEP_DRIFT"){orb.classList.add("pulse-fast");speakAlarm();}
-      else if(v.state==="EARLY_DRIFT"){orb.classList.add("pulse-slow");speakAlarm("Игорь, проверь бодрость. Держи внимание. При возможности остановись безопасно.");}
+      // ACTIVE/REST/SETTLING -> тишина прибора; всплеск тонуса = проснулся -> гасим сирену
+      if(sirenOn && v.tone > K.wakeLevel) { stopSiren(); logEvent("WAKE_DETECTED"); }
+      else if(v.state!=="SLEEP") stopSiren();
     }
 
-    setProgress("barSlowDrift",v.tiltDrift,0.4);$("valSlowDrift").textContent=v.tiltDrift.toFixed(3);
-    setProgress("barTone",v.tone,50.0);$("valTone").textContent=v.tone.toFixed(1);
-    setProgress("barBreath",v.breathAmp,0.5);$("valBreath").textContent=v.breathAmp.toFixed(3);
-    var mic=updateMicBreath();
-    setProgress("barMicBreath",mic.amp,0.5);$("valMicBreath").textContent=mic.ready?mic.amp.toFixed(3):"off";
-    setProgress("barSynergy",v.synergyCount,3.0);$("valSynergy").textContent=v.synergyCount+"/3";
+    // переходы состояний -> в лог
+    if(v.state!==prevState){ logEvent("STATE:"+v.state); prevState=v.state; }
+    setBig(v.state);
 
-    // переход состояния -> машинное событие в лог
-    if(v.state!==prevState){
-      if(v.state==="DEEP_DRIFT")logEvent("ALARM_DEEP");
-      else if(v.state==="EARLY_DRIFT"&&prevState!=="DEEP_DRIFT")logEvent("ALARM_EARLY");
-      prevState=v.state;
-    }
-    // лог каналов ~10 Гц
-    var nowT=Date.now();
-    if(recording && nowT-lastLogT>=100){ pushRow(v,""); lastLogT=nowT; updateLogCount(); }
+    // метрики
+    $("valTone").textContent=v.tone.toFixed(1);
+    setProgress("barTone", v.tone, 20);
+    $("valAnchor").textContent=v.anchor!=null?v.anchor.toFixed(1):"—";
+    $("valSlope").textContent=(v.slope>=0?"+":"")+v.slope.toFixed(2);
+    $("valSlope").style.color = v.slope < K.driftSlope ? "var(--sleep)" : "var(--text)";
+    $("valBreath").textContent=b.amp.toFixed(2);
+    setProgress("barBreath", b.amp, 1.0);
+    $("valBg").textContent = v.toneSlow>K.activityLevel ? "актив" : (v.inQuiet?"тишина":"вход");
+    $("diagLog2").textContent="t="+tSec.toFixed(0)+"с · фон="+v.toneSlow.toFixed(1)+" · якорь="+(v.anchor!=null?v.anchor.toFixed(1):"-")+" · наклон="+v.slope.toFixed(2)+"/мин · дисп="+(v.tvar!=null?v.tvar.toFixed(2):"-")+" (плато<"+K.sleepVar+")";
 
-    chartData.push(v.breathWave);if(chartData.length>150)chartData.shift();drawChart();
+    // график
+    toneBuf.push(v.tone); anchorBuf.push(v.anchor);
+    if(toneBuf.length>200){toneBuf.shift();anchorBuf.shift();}
+    drawChart();
+
+    // лог 5/сек
+    if(recording && Date.now()-lastLogT>200){ pushRow(v,""); lastLogT=Date.now(); }
   }
   requestAnimationFrame(loop);
 }
-var canvas=$("liveChart"),ctx=canvas.getContext("2d");
-function drawChart(){var w=canvas.clientWidth,h=canvas.clientHeight;if(canvas.width!==w){canvas.width=w;canvas.height=h;}
-  ctx.clearRect(0,0,w,h);ctx.strokeStyle="rgba(255,255,255,0.1)";ctx.beginPath();ctx.moveTo(0,h/2);ctx.lineTo(w,h/2);ctx.stroke();
-  if(chartData.length<2)return;ctx.strokeStyle="#4aa3ff";ctx.lineWidth=2;ctx.beginPath();var dx=w/150;
-  for(var i=0;i<chartData.length;i++){var x=i*dx,y=(h/2)-(chartData[i]*(h/0.6));if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y);}ctx.stroke();}
 
-// ---------- ЗАПИСЬ: голосовой журнал + сенсорный CSV ----------
-$("stopSaveBtn").addEventListener("click",function(){
-  if(recording){ recording=false; logEvent("REC_STOP"); stopAudioRecording(); downloadLog(); this.textContent="● ЗАПИСЬ СНОВА"; }
-  else { recording=true; lastLogT=0; logEvent("REC_RESUME"); this.textContent="■ СТОП И СКАЧАТЬ ЛОГ"; }
+function setProgress(id,val,max){ $(id).style.width=clamp((val/max)*100,0,100)+"%"; }
+
+var tc=null,tctx=null;
+function drawChart(){
+  if(!tc){tc=$("toneChart");tctx=tc.getContext("2d");}
+  var w=tc.clientWidth,h=tc.clientHeight; if(tc.width!==w){tc.width=w;tc.height=h;}
+  tctx.clearRect(0,0,w,h);
+  var mx=20, dx=w/200;
+  // линия порога активности
+  tctx.strokeStyle="rgba(45,212,167,0.25)";tctx.setLineDash([4,4]);tctx.beginPath();
+  var ya=h-(K.activityLevel/mx)*h; tctx.moveTo(0,ya);tctx.lineTo(w,ya);tctx.stroke();
+  // линия уровня сна
+  tctx.strokeStyle="rgba(255,77,94,0.3)";var ys=h-(K.sleepLevel/mx)*h;tctx.beginPath();tctx.moveTo(0,ys);tctx.lineTo(w,ys);tctx.stroke();
+  tctx.setLineDash([]);
+  // якорь тишины (красный)
+  tctx.strokeStyle="rgba(255,120,120,0.7)";tctx.lineWidth=1.5;tctx.beginPath();var st=false;
+  for(var i=0;i<anchorBuf.length;i++){ if(anchorBuf[i]==null){st=false;continue;} var x=i*dx,y=h-clamp(anchorBuf[i]/mx,0,1)*h; if(!st){tctx.moveTo(x,y);st=true;}else tctx.lineTo(x,y);}
+  tctx.stroke();
+  // тонус (зелёный)
+  tctx.strokeStyle="var(--accent)";tctx.strokeStyle="#2dd4a7";tctx.lineWidth=2;tctx.beginPath();
+  for(var j=0;j<toneBuf.length;j++){var x2=j*dx,y2=h-clamp(toneBuf[j]/mx,0,1)*h;if(j===0)tctx.moveTo(x2,y2);else tctx.lineTo(x2,y2);}
+  tctx.stroke();
+}
+
+// ============================================================
+//  КНОПКИ
+// ============================================================
+$("startBtn").addEventListener("click", function(){
+  note=$("sessionNote").value||"";
+  audioWanted = $("audioEnable").checked;
+  ensureAudio();
+  // разблокировать звук жестом
+  try{var u=new SpeechSynthesisUtterance("");u.volume=0;synth&&synth.speak(u);}catch(e){}
+  // wake lock
+  if(navigator.wakeLock){ navigator.wakeLock.request("screen").catch(function(){}); }
+  // сенсоры
+  if(typeof DeviceMotionEvent!=="undefined" && typeof DeviceMotionEvent.requestPermission==="function"){
+    DeviceMotionEvent.requestPermission().then(function(r){if(r==="granted")startDeviceMotion();}).catch(function(){startDeviceMotion();});
+  } else startDeviceMotion();
+
+  $("setupPanel").classList.add("hidden");
+  $("runtimePanel").classList.remove("hidden");
+  watcher=new QuietWatcher(); sessionT0=Date.now(); tStart=performance.now();
+  logEvent("SESSION_START"); if(note)logEvent("NOTE:"+note);
+  startAudio();   // аудио: синхро-фон + голос-метки
+  requestAnimationFrame(loop);
 });
 
-// кнопка "опора": пересброс наклона, когда телефон уже в кармане
-$("recapBtn").addEventListener("click",function(){
-  captureGravityRef(); if(layer)layer.reset();
-  autoCapDone=true; autoCapJitter=[]; autoCapUnsettleCount=0; lastQuietAvg="";
-  logEvent("RECAL_POCKET"); navigator.vibrate&&navigator.vibrate(50);
-  this.textContent="✓ опора пересброшена (ручной)";
-  var b=this; setTimeout(function(){b.textContent="📍 Опора: пересброс наклона (ручной)";},1500);
+$("recapBtn").addEventListener("click", function(){
+  if(watcher){ watcher.reset(); autoDone=false; autoJitter=[]; logEvent("MANUAL_RESET"); vibrate(50);
+    this.textContent="✓ опора сброшена"; var b=this; setTimeout(function(){b.textContent="📍 Опора: я устроился (ручной сброс)";},1500);}
 });
 
-// ---------- START ----------
-$("startBtn").addEventListener("click",async function(){
-  var s=new SpeechSynthesisUtterance('');s.volume=0;synth.speak(s); // разблокировать TTS
-  requestWakeLock();
-  sessionT0=Date.now();
-  await startMicCapture();
-  if(typeof DeviceMotionEvent!=="undefined"&&typeof DeviceMotionEvent.requestPermission==="function"){
-    DeviceMotionEvent.requestPermission().then(function(r){if(r==="granted")startDeviceMotion();});
-  }else startDeviceMotion();
+$("testSirenBtn").addEventListener("click", function(){
+  startSiren(); setTimeout(stopSiren,2000);
+});
+
+$("stopSaveBtn").addEventListener("click", function(){
+  if(recording){ recording=false; stopSiren(); logEvent("REC_STOP"); downloadLog(); stopAudioAndDownload(); this.textContent="● Запись снова (новая сессия)"; }
+  else { location.reload(); }
 });
 </script>
 </body>
 </html>
-
