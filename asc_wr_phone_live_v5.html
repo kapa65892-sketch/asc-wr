@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>ASC-WR Live (v12 · аудио-канал в лягушке + три уровня)</title>
+<title>ASC-WR Live (v13 · чистка: убран мёртвый аудио-гейт и лишняя кнопка)</title>
 <style>
 :root{--bg:#07090e;--panel:#0c1014;--border:#1a2330;--accent:#2dd4a7;--text:#e8e2d4;--dim:#5c6675;
   --calm:#85aeae;--rest:#2dd4a7;--drift:#f5a623;--sleep:#ff4d5e;}
@@ -31,7 +31,7 @@ canvas{width:100%;background:#0c1014;border-radius:10px;display:block;}
 </head>
 <body>
 <div class="logo">ASC-WR</div>
-<div class="logo-sub">V12 · аудио идёт рядом с гироскопом: громкая среда=едешь/говоришь, тишина=рабочее окно</div>
+<div class="logo-sub">V13 · аудио только в файл (разбор+синхро). Тревога — дрейф вниз в углубляющейся тишине</div>
 
 <!-- SETUP -->
 <div class="panel" id="setupPanel">
@@ -42,7 +42,7 @@ canvas{width:100%;background:#0c1014;border-radius:10px;display:block;}
     Писать аудио (синхро-фон салона + голосовые метки)
   </label>
   <button class="btn btn-primary" id="startBtn">▶ Активировать датчики</button>
-  <div class="diag" id="diagLog" style="margin-top:10px;">V12 загружен. Аудио = и файл (синхро+метки), и канал лягушки (контекст). Жду активации.</div>
+  <div class="diag" id="diagLog" style="margin-top:10px;">V13 загружен. Аудио пишется в файл для разбора. Автозахват опоры по затишью. Жду активации.</div>
 </div>
 
 <!-- RUNTIME -->
@@ -63,7 +63,6 @@ canvas{width:100%;background:#0c1014;border-radius:10px;display:block;}
     <div class="metric-card"><div class="metric-label">🔊 Звук</div><div class="bar-c"><div class="bar-f" id="barAudio" style="background:#9b8cff"></div></div><div class="metric-value" id="valAudio" style="font-size:13px;">—</div></div>
   </div>
 
-  <button class="btn btn-secondary" id="recapBtn" style="margin-bottom:10px;">📍 Опора: я устроился (ручной сброс)</button>
   <button class="btn btn-secondary" id="testSirenBtn" style="margin-bottom:10px;background:#3a1a1f;">🔊 Проверить сирену (2 сек)</button>
   <button class="btn btn-primary" id="stopSaveBtn" style="background:#1a2330;color:var(--text);">■ Стоп и скачать лог</button>
   <div class="diag" id="diagLog2" style="margin-top:10px;"></div>
@@ -95,8 +94,8 @@ var K = {
   varWindowSec:  15,     // окно дисперсии
   sleepConfirmSec: 15,   // секунд плоского низкого = подтверждённый сон
   wakeLevel:     8.0,    // всплеск тонуса выше -> проснулся, сирену гасить
-  breathSteadyMax: 0.12, // амплитуда дыхания ниже -> признак ровного сна
-  audioGate:     0.55    // громкость среды выше (0..1) -> едешь/говоришь, дрейф НЕ тревожим
+  breathSteadyMax: 0.12  // амплитуда дыхания ниже -> признак ровного сна
+  // (audioGate убран в v13: грудной микрофон не несёт контекста; аудио — только в файл)
 };
 
 function ema(x, prev, tau){ return prev===null ? x : prev + (x-prev)*tau; }
@@ -118,8 +117,6 @@ var QuietWatcher = (function(){
     while(this.hist.length>2 && tSec - this.hist[0].t > 40) this.hist.shift();
     this.varBuf.push({t:tSec, v:tone});
     while(this.varBuf.length>2 && tSec - this.varBuf[0].t > K.varWindowSec) this.varBuf.shift();
-
-    var audioActive = (audioLevel > K.audioGate);  // громко = едешь/говоришь = бодрая среда
 
     // активный фон -> отдыхаем
     if(slow > K.activityLevel){
@@ -156,10 +153,11 @@ var QuietWatcher = (function(){
       this.state="DRIFT"; return this._out(slow,slope,breathAmp,tvar,audioLevel);
     } else { this.sleepCondStartT=null; }
 
-    // ДРЕЙФ (мягко): тишина УГЛУБЛЯЕТСЯ (ниже якоря И трендом вниз) И среда НЕ громкая.
-    // ровная езда сидит на низком, но не углубляется + мотор громкий -> НЕ тревожим.
+    // ДРЕЙФ (мягко): тишина УГЛУБЛЯЕТСЯ (ниже якоря И трендом вниз).
+    // ровная езда сидит на низком, но НЕ углубляется -> не тревожим.
+    // (аудио-гейт убран в v13: грудной микрофон глух к мотору, контекст не давал)
     var deepening = (this.quietAnchor!==null && slow < this.quietAnchor - K.driftBelow && slope < K.driftSlope);
-    if(deepening && !audioActive){
+    if(deepening){
       this.state="DRIFT"; return this._out(slow,slope,breathAmp,tvar,audioLevel);
     }
     this.state="REST"; return this._out(slow,slope,breathAmp,tvar,audioLevel);
@@ -414,9 +412,9 @@ function loop(){
     $("valBreath").textContent=b.amp.toFixed(2);
     setProgress("barBreath", b.amp, 1.0);
     $("valBg").textContent = v.toneSlow>K.activityLevel ? "актив" : (v.inQuiet?"тишина":"вход");
-    $("valAudio").textContent = audioLevel.toFixed(2) + (audioLevel>K.audioGate?" 🔊":"");
+    $("valAudio").textContent = audioLevel.toFixed(2);
     setProgress("barAudio", audioLevel, 1.0);
-    $("diagLog2").textContent="t="+tSec.toFixed(0)+"с · фон="+v.toneSlow.toFixed(1)+" · якорь="+(v.anchor!=null?v.anchor.toFixed(1):"-")+" · наклон="+v.slope.toFixed(2)+" · дисп="+(v.tvar!=null?v.tvar.toFixed(2):"-")+" · звук="+audioLevel.toFixed(2)+(audioLevel>K.audioGate?"(громко)":"(тихо)");
+    $("diagLog2").textContent="t="+tSec.toFixed(0)+"с · фон="+v.toneSlow.toFixed(1)+" · якорь="+(v.anchor!=null?v.anchor.toFixed(1):"-")+" · наклон="+v.slope.toFixed(2)+" · дисп="+(v.tvar!=null?v.tvar.toFixed(2):"-")+" · звук(запись)="+audioLevel.toFixed(2);
 
     // график
     toneBuf.push(v.tone); anchorBuf.push(v.anchor);
@@ -475,11 +473,6 @@ $("startBtn").addEventListener("click", function(){
   logEvent("SESSION_START"); if(note)logEvent("NOTE:"+note);
   startAudio();   // аудио: синхро-фон + голос-метки
   requestAnimationFrame(loop);
-});
-
-$("recapBtn").addEventListener("click", function(){
-  if(watcher){ watcher.reset(); autoDone=false; autoJitter=[]; logEvent("MANUAL_RESET"); vibrate(50);
-    this.textContent="✓ опора сброшена"; var b=this; setTimeout(function(){b.textContent="📍 Опора: я устроился (ручной сброс)";},1500);}
 });
 
 $("testSirenBtn").addEventListener("click", function(){
