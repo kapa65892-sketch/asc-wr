@@ -31,18 +31,22 @@ canvas{width:100%;background:#0c1014;border-radius:10px;display:block;}
 </head>
 <body>
 <div class="logo">ASC-WR</div>
-<div class="logo-sub">V13 · аудио только в файл (разбор+синхро). Тревога — дрейф вниз в углубляющейся тишине</div>
+<div class="logo-sub">V14 · знает где сидит (грудь/нога) + отличает СТОЯНКУ от сна</div>
 
 <!-- SETUP -->
 <div class="panel" id="setupPanel">
-  <div style="font-size:13px;margin-bottom:10px;">Положи телефон/талисман на ГРУДЬ или в карман. Нажми «Активировать», устройся — опора захватится сама по затишью.</div>
+  <div style="font-size:13px;margin-bottom:10px;">Выбери, ГДЕ телефон. От места зависит, на что смотрит лягушка.</div>
+  <div style="display:flex;gap:8px;margin-bottom:12px;">
+    <button class="btn btn-secondary placeBtn" id="placeChest" data-place="chest" style="flex:1;border:2px solid var(--accent);">🫁 ГРУДЬ<br><span style="font-size:11px;opacity:0.7;">тело: тонус+дыхание</span></button>
+    <button class="btn btn-secondary placeBtn" id="placeLeg" data-place="leg" style="flex:1;">🦵 НОГА/КАРМАН<br><span style="font-size:11px;opacity:0.7;">педали: всплески</span></button>
+  </div>
   <input type="text" id="sessionNote" class="input-field" placeholder="заметка: поза, место, тест">
   <label style="display:flex;align-items:center;gap:8px;font-size:13px;margin-bottom:10px;color:var(--text);">
     <input type="checkbox" id="audioEnable" checked style="width:18px;height:18px;">
     Писать аудио (синхро-фон салона + голосовые метки)
   </label>
   <button class="btn btn-primary" id="startBtn">▶ Активировать датчики</button>
-  <div class="diag" id="diagLog" style="margin-top:10px;">V13 загружен. Аудио пишется в файл для разбора. Автозахват опоры по затишью. Жду активации.</div>
+  <div class="diag" id="diagLog" style="margin-top:10px;">V14. Место: ГРУДЬ. Грудь — тонус+дыхание, штиль=стоянка не сон. Нога — всплески педалей=управление. Жду активации.</div>
 </div>
 
 <!-- RUNTIME -->
@@ -83,19 +87,32 @@ function clamp(v,a,b){return v<a?a:(v>b?b:v);}
 //    SLEEP  - тихо, плато на низком уровне + ровное дыхание -> ЗАСНУЛ -> СИРЕНА
 // ============================================================
 
-// --- НАСТРОЙКИ (ручки, откалиброваны на реальной записи сна 06.06) ---
+// --- НАСТРОЙКИ (ручки, откалиброваны на реальной записи сна 06.06 + заезд 09.06) ---
+var PLACEMENT = "chest";  // "chest" (грудь S22) или "leg" (нога/карман S23). Выбирается при старте.
 var K = {
   activityLevel: 6.0,    // тонус выше -> активный фон, прибор отдыхает
   quietEnterSec: 4,      // секунд затишья до постановки якоря тишины
   driftSlope:   -0.25,   // ед/мин: тонус сползает быстрее -> дрейф в сон
   driftBelow:    0.8,    // тонус ниже якоря на столько -> дрейф
   sleepLevel:    2.3,    // тонус ниже + ПЛОСКО -> кандидат в сон
-  sleepVar:      0.5,    // дисперсия тонуса ниже = плато (не рябь-борьба)
+  sleepVar:      0.10,   // ИСПРАВЛЕНО по данным 09.06: настоящий сон дома var=0.03;
+                         // стоянка с холостым мотором var=0.42 (дрожь). Порог 0.10 отделяет
+                         // настоящее замирание тела (сон) от дрожи стоящей машины (НЕ сон).
   varWindowSec:  15,     // окно дисперсии
   sleepConfirmSec: 15,   // секунд плоского низкого = подтверждённый сон
   wakeLevel:     8.0,    // всплеск тонуса выше -> проснулся, сирену гасить
-  breathSteadyMax: 0.12  // амплитуда дыхания ниже -> признак ровного сна
-  // (audioGate убран в v13: грудной микрофон не несёт контекста; аудио — только в файл)
+  breathSteadyMax: 0.12, // амплитуда дыхания ниже -> признак ровного сна
+  // --- НОВОЕ v14: отличать СТОЯНКУ от СНА (заезд 09.06 доказал) ---
+  // СТОЯНКА (мотор на холостых трясёт стоящую машину) = дисперсия 0.15..0.5 при низком тонусе.
+  // НАСТОЯЩИЙ СОН = дисперсия < 0.10 (тело реально замерло, дома было 0.03).
+  // Зона 0.10..0.6 при низком тонусе = СТОЯНКА/работающий мотор -> МОЛЧАТЬ.
+  stopVarLo:     0.10,   // выше этого (и ниже stopVarHi) при низком тонусе = стоянка, не сон
+  stopVarHi:     0.60,   // дрожь холостого мотора укладывается сюда
+  recentMotionSec: 45,   // окно "была ли недавно активность" (живой ли водитель/едет ли машина)
+  // --- НОГА (карман): педали = всплески, не уровень ---
+  legSpikeLevel: 15,     // тонус выше -> нажатие педали (всплеск активности ноги)
+  legQuietSec:   90,     // секунд БЕЗ всплесков педалей -> нога не работает -> тревога
+  legSpikeNeed:  2        // столько всплесков за окно -> нога работает = водитель управляет
 };
 
 function ema(x, prev, tau){ return prev===null ? x : prev + (x-prev)*tau; }
@@ -108,9 +125,17 @@ var QuietWatcher = (function(){
     this.hist=[];               // [{t,v}] сглаж.тонус для наклона
     this.varBuf=[];             // [{t,tone}] сырой тонус для дисперсии
     this.sleepCondStartT=null;  // когда впервые наступило условие сна
+    this.lastMotionT=null;      // v14: когда последний раз была активность (тонус выше порога)
+    this.lastSpikeT=null;       // v14(нога): когда последний всплеск педали
+    this.spikeBuf=[];           // v14(нога): [t] всплесков педалей
     this.state="WAIT";
   };
   QW.prototype.update = function(tone, breathAmp, audioLevel, tSec){
+    // === ВЕТКА НОГИ (карман): педали = всплески, тишина между ними = НОРМА ===
+    if(PLACEMENT==="leg"){
+      return this._updateLeg(tone, tSec, breathAmp, audioLevel);
+    }
+    // === ВЕТКА ГРУДИ (тело): тонус + дыхание + отличие стоянки от сна ===
     this.toneSlow = ema(tone, this.toneSlow, 0.04);
     var slow = this.toneSlow;
     this.hist.push({t:tSec, v:slow});
@@ -118,9 +143,10 @@ var QuietWatcher = (function(){
     this.varBuf.push({t:tSec, v:tone});
     while(this.varBuf.length>2 && tSec - this.varBuf[0].t > K.varWindowSec) this.varBuf.shift();
 
-    // активный фон -> отдыхаем
+    // активный фон -> отдыхаем + запомнить момент активности
     if(slow > K.activityLevel){
       this.inQuiet=false; this.quietAnchor=null; this.quietStartT=null; this.sleepCondStartT=null;
+      this.lastMotionT=tSec;
       this.state="ACTIVE";
       return this._out(slow, 0, breathAmp, 0, audioLevel);
     }
@@ -146,21 +172,64 @@ var QuietWatcher = (function(){
       tvar=Math.sqrt(s2/this.varBuf.length);
     }
 
-    // СОН (сирена): плато низкое+плоское длительно. НЕ гейтится аудио (безопасность).
+    // === v14 КЛЮЧЕВОЕ: отличить СТОЯНКУ от СНА по дисперсии (данные 09.06) ===
+    // Настоящий сон: тело замерло -> дисперсия ОЧЕНЬ низкая (<0.10, дома было 0.03).
+    // Стоянка с работающим мотором: холостой ход трясёт машину -> дисперсия 0.10..0.60.
+    // => низкий тонус + СРЕДНЯЯ дрожь (0.10..0.60) = СТОЯНКА, не сон -> молчать.
+    var stopShake = (tvar >= K.stopVarLo && tvar <= K.stopVarHi);
+    if(slow < K.sleepLevel && stopShake){
+      // дрожь работающего мотора на стоянке — водитель просто стоит/ждёт
+      this.sleepCondStartT=null;
+      this.state="STOP"; return this._out(slow, slope, breathAmp, tvar, audioLevel);
+    }
+
+    // СОН (сирена): тонус низкий И тело РЕАЛЬНО замерло (дисперсия < sleepVar=0.10).
     if(slow < K.sleepLevel && tvar < K.sleepVar){
       if(this.sleepCondStartT===null) this.sleepCondStartT=tSec;
       if(tSec - this.sleepCondStartT > K.sleepConfirmSec){ this.state="SLEEP"; return this._out(slow,slope,breathAmp,tvar,audioLevel); }
       this.state="DRIFT"; return this._out(slow,slope,breathAmp,tvar,audioLevel);
     } else { this.sleepCondStartT=null; }
 
-    // ДРЕЙФ (мягко): тишина УГЛУБЛЯЕТСЯ (ниже якоря И трендом вниз).
-    // ровная езда сидит на низком, но НЕ углубляется -> не тревожим.
-    // (аудио-гейт убран в v13: грудной микрофон глух к мотору, контекст не давал)
-    var deepening = (this.quietAnchor!==null && slow < this.quietAnchor - K.driftBelow && slope < K.driftSlope);
+    // ДРЕЙФ (мягко): тишина УГЛУБЛЯЕТСЯ (ниже якоря И трендом вниз), и НЕ дрожь стоянки.
+    var deepening = (this.quietAnchor!==null && slow < this.quietAnchor - K.driftBelow && slope < K.driftSlope && !stopShake);
     if(deepening){
       this.state="DRIFT"; return this._out(slow,slope,breathAmp,tvar,audioLevel);
     }
     this.state="REST"; return this._out(slow,slope,breathAmp,tvar,audioLevel);
+  };
+
+  // === НОГА (карман): водитель работает педалями = ВСПЛЕСКИ. ===
+  // Логика ОБРАТНАЯ груди: тишина ноги между педалями = НОРМА (не сон!).
+  // Тревога только если ДОЛГО нет всплесков педалей (нога выпала из управления).
+  QW.prototype._updateLeg = function(tone, tSec, breathAmp, audioLevel){
+    // всплеск педали?
+    if(tone > K.legSpikeLevel){
+      this.lastSpikeT = tSec;
+      this.spikeBuf.push(tSec);
+    }
+    // чистим окно всплесков
+    while(this.spikeBuf.length>0 && tSec - this.spikeBuf[0] > K.legQuietSec) this.spikeBuf.shift();
+    var spikes = this.spikeBuf.length;
+    this.toneSlow = ema(tone, this.toneSlow, 0.04);
+
+    // нога работает (есть нажатия) -> водитель управляет -> МОЛЧАТЬ
+    if(spikes >= K.legSpikeNeed){
+      this.state="ACTIVE"; // нога активна = управление
+      return this._out(this.toneSlow, 0, breathAmp, spikes, audioLevel);
+    }
+    // нет всплесков, но недавно были -> затишье между манёврами (норма, ровная дорога)
+    if(this.lastSpikeT!==null && tSec - this.lastSpikeT <= K.legQuietSec){
+      this.state="REST";
+      return this._out(this.toneSlow, 0, breathAmp, spikes, audioLevel);
+    }
+    // ДОЛГО нет работы ногой -> нога выпала из управления -> тревога
+    // (но только если вообще когда-то работала — иначе ждём первой активности)
+    if(this.lastSpikeT!==null){
+      this.state="DRIFT"; // нога давно не жмёт педали = подозрение на выпадение
+      return this._out(this.toneSlow, 0, breathAmp, spikes, audioLevel);
+    }
+    this.state="WAIT";
+    return this._out(this.toneSlow, 0, breathAmp, spikes, audioLevel);
   };
   QW.prototype._out = function(slow, slope, breathAmp, tvar, audioLevel){
     return {state:this.state, toneSlow:slow, slope:slope, anchor:this.quietAnchor,
@@ -318,13 +387,13 @@ function pushRow(v, ev){
 function logEvent(ev){ pushRow(window._lastV||null, ev); }
 function downloadLog(){
   if(!logRows.length){alert("Лог пуст");return;}
-  var cols=["t_ms","tone","toneSlow","slope_per_min","quietAnchor","toneVar","breathAmp","audioRMS","audioLevel","state","event"];
+  var cols=["t_ms","placement","tone","toneSlow","slope_per_min","quietAnchor","toneVar","breathAmp","audioRMS","audioLevel","state","event"];
   var lines=[cols.join(",")];
   for(var i=0;i<logRows.length;i++){var r=logRows[i];
-    lines.push([r.t,r.tone,r.toneSlow,r.slope,r.anchor,r.tvar,r.breath,r.audioRMS,r.audioLvl,r.state,'"'+r.event+'"'].join(","));}
+    lines.push([r.t,PLACEMENT,r.tone,r.toneSlow,r.slope,r.anchor,r.tvar,r.breath,r.audioRMS,r.audioLvl,r.state,'"'+r.event+'"'].join(","));}
   var blob=new Blob([lines.join("\n")],{type:"text/csv"});
   var url=URL.createObjectURL(blob), a=document.createElement("a");
-  a.href=url; a.download="asc_wr_v10_"+new Date().toISOString().replace(/[:.]/g,"-")+".csv";
+  a.href=url; a.download="asc_wr_v14_"+PLACEMENT+"_"+new Date().toISOString().replace(/[:.]/g,"-")+".csv";
   document.body.appendChild(a); a.click(); document.body.removeChild(a);
   setTimeout(function(){URL.revokeObjectURL(url);},1000);
 }
@@ -342,10 +411,11 @@ var toneBuf=[], anchorBuf=[];
 
 function setBig(state){
   var el=$("bigState"), bg="#1a2330", txt="—";
-  if(state==="ACTIVE"){bg="#13301f";txt="БОДР · активность";}
+  if(state==="ACTIVE"){bg="#13301f";txt=PLACEMENT==="leg"?"БОДР · педали работают":"БОДР · активность";}
   else if(state==="SETTLING"){bg="#1a2330";txt="устраиваюсь…";}
   else if(state==="REST"){bg="#0d3b2e";txt="✓ ПОКОЙ · норма";}
-  else if(state==="DRIFT"){bg="#5a3d0a";txt="⚠ ДРЕЙФ ВНИЗ · засыпаешь!";}
+  else if(state==="STOP"){bg="#10243a";txt="⏸ СТОЯНКА · не сон, молчу";}
+  else if(state==="DRIFT"){bg="#5a3d0a";txt=PLACEMENT==="leg"?"⚠ НОГА НЕ ЖМЁТ · проверься!":"⚠ ДРЕЙФ ВНИЗ · засыпаешь!";}
   else if(state==="SLEEP"){bg="#5a0d16";txt="🚨 СОН · ПРОСНИСЬ!";}
   else if(state==="WAIT"){txt="ОЖИДАНИЕ";}
   el.style.background=bg; el.textContent=txt;
@@ -454,6 +524,18 @@ function drawChart(){
 // ============================================================
 //  КНОПКИ
 // ============================================================
+// выбор места: грудь / нога
+document.querySelectorAll(".placeBtn").forEach(function(b){
+  b.addEventListener("click", function(){
+    PLACEMENT = this.getAttribute("data-place");
+    document.querySelectorAll(".placeBtn").forEach(function(x){ x.style.border="none"; });
+    this.style.border="2px solid var(--accent)";
+    var d=$("diagLog");
+    if(PLACEMENT==="leg") d.textContent="V14. Место: НОГА/КАРМАН. Смотрю на ВСПЛЕСКИ педалей = водитель управляет. Тишина между педалями = норма. Тревога — если долго нет работы ногой.";
+    else d.textContent="V14. Место: ГРУДЬ. Тонус+дыхание. Мёртвый штиль = СТОЯНКА (не сон, молчу). Дрейф вниз в движении = тревога.";
+  });
+});
+
 $("startBtn").addEventListener("click", function(){
   note=$("sessionNote").value||"";
   audioWanted = $("audioEnable").checked;
